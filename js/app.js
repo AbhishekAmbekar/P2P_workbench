@@ -10,15 +10,15 @@
     P: P, REF: REF, state: null, role: "buyer", tab: "dashboard",
     views: {}, actions: {}, sel: {}, tabs: [
       { id: "dashboard", label: "Dashboard" },
-      { id: "requests", label: "Requests and PRs" },
-      { id: "rfx", label: "RFx" },
-      { id: "pos", label: "Purchase orders" },
+      { id: "requests", label: "Requests and PRs", group: "Request" },
+      { id: "rfx", label: "RFx", group: "Source" },
+      { id: "pos", label: "Purchase orders", group: "Order" },
       { id: "expedite", label: "Expedite" },
-      { id: "grn", label: "Receipts (GRN)" },
+      { id: "grn", label: "Receipts (GRN)", group: "Receive and pay" },
       { id: "invoices", label: "Invoices" },
-      { id: "suppliers", label: "Suppliers" },
+      { id: "suppliers", label: "Suppliers", group: "Records" },
       { id: "audit", label: "Audit trail" },
-      { id: "guide", label: "Guide" }
+      { id: "guide", label: "Guide", group: "Help" }
     ]
   };
 
@@ -96,6 +96,7 @@
     // Leaving a screen drops its half finished "create" panel so it does not reappear later.
     if (tab !== "pos") App.sel.poNew = null;
     if (tab !== "rfx") App.sel.rfxNew = null;
+    App.sel.rec = null;
     App.tab = tab;
     if (id) App.sel[tab] = id;
     save(); App.render();
@@ -115,20 +116,40 @@
     var badges = {};
     P.queueFor(App.state, App.role, App.now()).forEach(function (q) { badges[q.tab] = (badges[q.tab] || 0) + q.count; });
     document.getElementById("tabs").innerHTML = App.tabs.map(function (t) {
-      return '<button data-act="tab" data-arg="' + t.id + '" class="' + (t.id === App.tab ? "on" : "") + '">' +
-        App.esc(t.label) + (badges[t.id] ? '<span class="badge">' + badges[t.id] + "</span>" : "") + "</button>";
+      return (t.group ? '<div class="navgrp">' + App.esc(t.group) + "</div>" : "") +
+        '<button data-act="tab" data-arg="' + t.id + '" class="' + (t.id === App.tab ? "on" : "") + '">' +
+        "<span>" + App.esc(t.label) + "</span>" + (badges[t.id] ? '<span class="badge">' + badges[t.id] + "</span>" : "") + "</button>";
     }).join("");
 
     var view = App.views[App.tab];
     var html;
     try {
-      html = view ? view() : '<div class="card"><p class="empty">This section is not built yet.</p></div>';
-      html = App.page(html);
+      if (App.sel.rec && App.recordPage) html = App.recordPage(App.sel.rec);
+      else html = App.page(view ? view() : '<div class="card"><p class="empty">This section is not built yet.</p></div>');
     } catch (e) {
       html = '<div class="note bad">Could not draw this section: ' + App.esc(e.message) + "</div>";
     }
     document.getElementById("view").innerHTML = html;
+    syncHash();
   };
+
+  // ---------- links ----------
+  // The address shows the open screen (#pos) or record (#PO-4001), so a page can be bookmarked or sent.
+  // Opening a record adds a history step, so the browser Back button returns to where you were.
+  function syncHash() {
+    var want = "#" + (App.sel.rec || App.tab);
+    if (location.hash === want) return;
+    try { history[App.sel.rec ? "pushState" : "replaceState"](null, "", want); } catch (e) { /* file pages can refuse this */ }
+  }
+  App.fromHash = function () {
+    var h = decodeURIComponent(location.hash.slice(1));
+    if (!h || h === (App.sel.rec || App.tab)) return false;
+    if (App.tabs.some(function (t) { return t.id === h; })) { App.sel.rec = null; App.tab = h; App.render(); return true; }
+    if (App.isRecordId && App.isRecordId(h.toUpperCase())) { App.openRecord(h); return true; }
+    return false;
+  };
+  window.addEventListener("hashchange", function () { App.fromHash(); });
+  window.addEventListener("popstate", function () { App.fromHash(); });
 
   // Every screen gets a white header band: the title, the short description under it, and the CSV buttons.
   // Views keep returning "<h2>Title</h2><p class=hint>...</p>..." and this moves those two into the band.
@@ -187,6 +208,7 @@
     document.getElementById("resetBtn").addEventListener("click", function () {
       App.reset(); App.toast("Demo data restored");
     });
-    App.render();
+    // A link such as #PO-4001 or #invoices opens that record or screen. Otherwise show the last screen used.
+    if (!(location.hash.length > 1 && App.fromHash())) App.render();
   };
 })();
