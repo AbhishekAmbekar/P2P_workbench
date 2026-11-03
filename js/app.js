@@ -13,6 +13,7 @@
       { id: "requests", label: "Requests and PRs" },
       { id: "rfx", label: "RFx" },
       { id: "pos", label: "Purchase orders" },
+      { id: "expedite", label: "Expedite" },
       { id: "grn", label: "Receipts (GRN)" },
       { id: "invoices", label: "Invoices" },
       { id: "suppliers", label: "Suppliers" },
@@ -49,6 +50,7 @@
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify({ state: App.state, role: App.role, tab: App.tab })); } catch (e) { /* storage can be blocked */ }
   }
+  App.save = save;
   function load() {
     try {
       var raw = localStorage.getItem(KEY);

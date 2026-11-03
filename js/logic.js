@@ -50,7 +50,7 @@
     });
     return {
       seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], audit: [], docs: docs
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], audit: [], docs: docs, contacts: {}
     };
   }
 
@@ -558,6 +558,120 @@
     return { status: slack < 0 ? "Late" : slack < 5 ? "At Risk" : "Clear", slack: slack };
   }
 
+  // ---------- supplier emails ----------
+  // The app never sends mail. It builds a draft and hands it to the user's own mail program or webmail.
+  var emailOk = function (e) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e || ""); };
+  var contactOf = function (s, supId) { return (s.contacts && s.contacts[supId]) || ""; };
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  var longDate = function (d) { var p = dateOf(d).split("-"); return Number(p[2]) + " " + MONTHS[Number(p[1]) - 1] + " " + p[0]; };
+  var plural = function (n, one, many) { return n + " " + (n === 1 ? one : many); };
+
+  function setContact(s, role, now, supId, email) {
+    need(role, ["buyer"]);
+    var sp = supplier(supId), e = (email || "").trim();
+    s.contacts = s.contacts || {};
+    if (!e) { delete s.contacts[supId]; log(s, now, role, supId, "Supplier email removed for " + sp.name); return ""; }
+    if (!emailOk(e)) fail("That does not look like an email address.");
+    s.contacts[supId] = e;
+    log(s, now, role, supId, "Supplier email saved for " + sp.name);
+    return e;
+  }
+
+  // Quantity still expected from the supplier. Rejected units do not count as received, quality holds do.
+  function leftToReceive(s, po) {
+    var t = grnTotals(s, po.id);
+    return Math.max(0, po.qty - t.accepted - t.hold);
+  }
+
+  function lastChase(s, poId) {
+    var hit = null;
+    s.audit.forEach(function (a) { if (a.entity === poId && a.action.indexOf("Chase email drafted") === 0) hit = a; });
+    return hit ? dateOf(hit.at) : null;
+  }
+
+  // Open POs that need a nudge, worst first. One reason per PO, the most serious one.
+  // overdue: supplier's own promise date has passed. late: promise is after the need by date.
+  // at risk: under 5 days of slack. confirm: issued more than 2 days ago and still not confirmed.
+  var TIER = { overdue: 0, late: 1, risk: 2, confirm: 3 };
+  function expediteList(s, now) {
+    var today = dateOf(now), rows = [];
+    s.pos.forEach(function (po) {
+      var st = poStatus(s, po);
+      if (["Issued", "Confirmed", "Partially received"].indexOf(st) < 0) return;
+      var left = leftToReceive(s, po);
+      if (left <= 0) return;
+      var c = ctb(s, po), kind = null, reason = "", size = 0;
+      var past = daysBetween(po.promisedDate, today);
+      var age = daysBetween(dateOf(po.createdAt), today);
+      if (past > 0) { kind = "overdue"; size = past; reason = "Promise date passed " + plural(past, "day", "days") + " ago"; }
+      else if (c.slack < 0) { kind = "late"; size = -c.slack; reason = "Promised " + plural(-c.slack, "day", "days") + " after the need by date"; }
+      else if (c.slack < 5) { kind = "risk"; size = 5 - c.slack; reason = "Only " + plural(c.slack, "day", "days") + " of slack"; }
+      else if (st === "Issued" && age > 2) { kind = "confirm"; size = age; reason = "Not confirmed after " + plural(age, "day", "days"); }
+      if (!kind) return;
+      rows.push({
+        po: po, kind: kind, reason: reason, size: size, left: left, slack: c.slack,
+        value: cents(left * po.unitPrice) / 100, supplier: supplier(po.supplierId),
+        email: contactOf(s, po.supplierId), lastChase: lastChase(s, po.id)
+      });
+    });
+    return rows.sort(function (a, b) {
+      return (TIER[a.kind] - TIER[b.kind]) || (b.size - a.size) || (b.value - a.value);
+    });
+  }
+
+  // Plain, polite chase message built from the PO record. The buyer can edit it before it goes anywhere.
+  function chaseDraft(s, poId, kind, fromName) {
+    var po = getPO(s, poId), it = item(po.itemId), sp = supplier(po.supplierId), left = leftToReceive(s, po);
+    var what = plural(left, it.uom, it.uom === "ea" ? "units" : it.uom + "s") + " of " + it.name;
+    var facts = "Order: " + po.id + ", " + what + "\nPromised: " + longDate(po.promisedDate) + "\nNeeded by: " + longDate(po.needBy) +
+      "\nDeliver to: " + po.site;
+    var subject, intro, ask;
+    if (kind === "confirm") {
+      subject = po.id + ": please confirm the delivery date";
+      intro = "We sent you the purchase order below and have not had a confirmation yet.";
+      ask = "Could you confirm the order and the date you can ship? A short reply is fine.";
+    } else if (kind === "overdue") {
+      subject = po.id + ": past the promised date, need an update";
+      intro = "The promised date on the order below has passed and we have not received the goods.";
+      ask = "Could you tell me where the order is, what caused the delay, and the earliest date it can ship? If part of it can ship sooner, a partial shipment is fine.";
+    } else {
+      subject = po.id + ": can the delivery date move up?";
+      intro = kind === "late"
+        ? "The promised date on the order below is later than the date we need it."
+        : "The promised date on the order below leaves us very little room before the date we need it.";
+      ask = "Could you check if you can ship earlier, or send part of it first? Please let me know the earliest date you can commit to.";
+    }
+    return {
+      to: contactOf(s, po.supplierId), subject: subject,
+      body: "Hi " + sp.name + " team,\n\n" + intro + "\n\n" + facts + "\n\n" + ask + "\n\nThank you,\n" + fromName
+    };
+  }
+
+  // Links that open the draft. Mailto has no real length limit but some programs cut long ones, so we flag it.
+  function mailLinks(d) {
+    var enc = encodeURIComponent, crlf = function (t) { return t.replace(/\r?\n/g, "\r\n"); };
+    var mailto = "mailto:" + enc(d.to || "").replace(/%40/g, "@") + "?subject=" + enc(d.subject) + "&body=" + enc(crlf(d.body));
+    return {
+      mailto: mailto,
+      gmail: "https://mail.google.com/mail/?view=cm&fs=1&to=" + enc(d.to || "") + "&su=" + enc(d.subject) + "&body=" + enc(d.body),
+      outlook: "https://outlook.office.com/mail/deeplink/compose?to=" + enc(d.to || "") + "&subject=" + enc(d.subject) + "&body=" + enc(d.body),
+      tooLong: mailto.length > 1800
+    };
+  }
+
+  // A draft file most mail programs open as an unsent message.
+  function emlText(d) {
+    return "To: " + (d.to || "") + "\r\nSubject: " + d.subject + "\r\nX-Unsent: 1\r\nContent-Type: text/plain; charset=UTF-8\r\n" +
+      "Content-Transfer-Encoding: 8bit\r\n\r\n" + d.body.replace(/\r?\n/g, "\r\n");
+  }
+
+  // The app cannot see whether the mail was sent, so the log says drafted, never sent.
+  function logChase(s, role, now, poId, via) {
+    need(role, ["buyer"]);
+    var po = getPO(s, poId), sp = supplier(po.supplierId);
+    log(s, now, role, po.id, "Chase email drafted for " + sp.name, "Opened through " + via + ". The app cannot tell if it was sent.");
+  }
+
   // ---------- 5. invoice and three way match ----------
   function matchInvoice(s, inv) {
     var po = getPO(s, inv.poId), issues = [];
@@ -681,6 +795,7 @@
       add("RFx open for quotes", s.rfx.filter(function (x) { return x.status === "Open"; }).length, "rfx");
       add("RFx ready to award", s.rfx.filter(function (x) { return x.status === "Evaluating"; }).length, "rfx");
       add("POs not yet confirmed by supplier", s.pos.filter(function (po) { return poStatus(s, po) === "Issued"; }).length, "pos");
+      add("POs to chase with the supplier", expediteList(s, now || new Date().toISOString()).length, "expedite");
       add("Invoice price exceptions", invFor("buyer"), "invoices");
     } else if (role === "warehouse") {
       add("POs open for receiving", openPOs.length, "pos");
@@ -748,6 +863,8 @@
     // new in this version
     extendQuote: extendQuote, renewDoc: renewDoc, docIssues: docIssues, supplierDocs: supplierDocs, docAlerts: docAlerts,
     quoteLanded: quoteLanded, poLanded: poLanded, refPrice: refPrice, landedUnit: landedUnit,
-    budgetStatus: budgetStatus, budgetCheck: budgetCheck, requestedValue: requestedValue
+    budgetStatus: budgetStatus, budgetCheck: budgetCheck, requestedValue: requestedValue,
+    setContact: setContact, contactOf: contactOf, emailOk: emailOk, leftToReceive: leftToReceive, expediteList: expediteList,
+    chaseDraft: chaseDraft, mailLinks: mailLinks, emlText: emlText, logChase: logChase, lastChase: lastChase, longDate: longDate
   };
 });
