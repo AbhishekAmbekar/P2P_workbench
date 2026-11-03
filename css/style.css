@@ -4,10 +4,13 @@
   --ok:#1f7a4d;--okbg:#e4f4ea;--warn:#a96b00;--warnbg:#fdf1d8;--bad:#b42318;--badbg:#fde7e4;--info:#255f9e;--infobg:#e3eefb;
   --bar:#8f8ad8;
 }
-@media (prefers-color-scheme:dark){
-  :root{--bg:#0f1115;--card:#171a21;--ink:#e5e7eb;--mut:#9ca3af;--line:#272c37;--acc:#818cf8;--acc-ink:#0b0d12;--accbg:#22264a;--thbg:#1b1f27;
+/* Always light, whatever the computer's own setting. The dark colors below apply only if the root element gets class="dark",
+   which nothing sets yet. They are kept for a future switch. */
+:root{color-scheme:light}
+:root.dark{color-scheme:dark}
+:root.dark{
+  --bg:#0f1115;--card:#171a21;--ink:#e5e7eb;--mut:#9ca3af;--line:#272c37;--acc:#818cf8;--acc-ink:#0b0d12;--accbg:#22264a;--thbg:#1b1f27;
     --ok:#6fd6a0;--okbg:#1b3426;--warn:#f0c15e;--warnbg:#3a2f14;--bad:#ff8f84;--badbg:#3d1c19;--info:#8ab8f0;--infobg:#1a2c44;--bar:#6366f1}
-}
 @font-face{font-family:"Inter";font-style:normal;font-weight:100 900;font-display:swap;src:url("../fonts/inter.woff2") format("woff2")}
 *{box-sizing:border-box}
 body{margin:0;font:var(--fs-base)/1.5 Inter,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;font-feature-settings:"tnum" 1,"cv11" 1;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
