@@ -17,7 +17,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
 - `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
 - `js/seed.js`: builds the demo by running real engine actions with backdated times.
-- `js/app.js`: shell, role switch, sidebar sections (`App.tabs`, with `group` labels), saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
+- `js/app.js`: shell, the Working as menu (a button and list that open downward, with the hidden `#roleSel` select holding the value), sidebar sections (`App.tabs`, with `group` labels), saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
 - `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
 - `js/view-record.js`: the full page for one record (REQ, PR, RFX, PO, GRN, INV), built on `P.docFlow`. Read only. `App.openRecord(id)`, `App.recLink(id)` and `App.recBtn(id)` open it. The address shows `#tab` or `#PO-4001`, and opening a record adds a Back step.
 - `js/view-*.js`: one file per screen. Events use `data-act`, `data-form` and `data-change` attributes and `App.actions.*`.
@@ -57,7 +57,7 @@ The screen tests need jsdom installed in a folder outside the repo. Pass an abso
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.

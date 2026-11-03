@@ -91,10 +91,10 @@ runs 28 checks on CSV reading, writing, export and import. The screen tests driv
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
-`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address.
+`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard.
 
 ## Natural next steps
 

@@ -103,6 +103,55 @@
     window.scrollTo(0, 0);
   };
 
+  // ---------- role menu ----------
+  // A button with a menu that always opens below it. A native select opens over itself on some systems,
+  // which covered the header. The hidden select stays as the value holder, so saving and tests work the same.
+  function drawRolePick() {
+    var box = document.getElementById("rolePick");
+    if (!box) return;
+    var cur = App.roleInfo(), open = box.classList.contains("open");
+    box.innerHTML = '<button type="button" class="rp-btn" aria-haspopup="listbox" aria-expanded="' + open + '" aria-labelledby="roleLbl rpNow">' +
+      '<span id="rpNow"><b>' + App.esc(cur.label) + '</b><span class="rp-per"> ' + App.esc(cur.persona) + '</span></span><span class="rp-caret" aria-hidden="true"></span></button>' +
+      '<ul class="rp-menu" role="listbox" aria-labelledby="roleLbl">' + REF.roles.map(function (r) {
+        return '<li role="option" tabindex="-1" data-role="' + r.id + '" aria-selected="' + (r.id === App.role) + '"' + (r.id === App.role ? ' class="on"' : "") + ">" +
+          "<b>" + App.esc(r.label) + "</b><span>" + App.esc(r.persona) + "</span></li>";
+      }).join("") + "</ul>";
+  }
+  function rolePickOpen(on) {
+    var box = document.getElementById("rolePick");
+    box.classList.toggle("open", on);
+    box.querySelector(".rp-btn").setAttribute("aria-expanded", on);
+    if (on) { var li = box.querySelector("li.on") || box.querySelector("li"); li.focus(); }
+  }
+  function pickRole(id) {
+    var sel = document.getElementById("roleSel");
+    rolePickOpen(false);
+    if (id && id !== App.role) { sel.value = id; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    document.querySelector("#rolePick .rp-btn").focus();
+  }
+  function bindRolePick() {
+    var box = document.getElementById("rolePick");
+    if (!box) return;
+    box.addEventListener("click", function (e) {
+      if (e.target.closest(".rp-btn")) { rolePickOpen(!box.classList.contains("open")); return; }
+      var li = e.target.closest("li[data-role]");
+      if (li) pickRole(li.dataset.role);
+    });
+    box.addEventListener("keydown", function (e) {
+      var items = Array.prototype.slice.call(box.querySelectorAll("li[data-role]")), i = items.indexOf(document.activeElement);
+      if (e.key === "Escape") { if (box.classList.contains("open")) { e.preventDefault(); pickRole(null); } }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!box.classList.contains("open")) { rolePickOpen(true); return; }
+        var next = e.key === "ArrowDown" ? Math.min(items.length - 1, i + 1) : Math.max(0, i - 1);
+        items[next].focus();
+      } else if ((e.key === "Enter" || e.key === " ") && i >= 0) { e.preventDefault(); pickRole(items[i].dataset.role); }
+    });
+    document.addEventListener("click", function (e) {
+      if (box.classList.contains("open") && !box.contains(e.target)) rolePickOpen(false);
+    });
+  }
+
   // ---------- rendering ----------
   App.render = function () {
     var sel = document.getElementById("roleSel");
@@ -112,6 +161,7 @@
       }).join("");
     }
     sel.value = App.role;
+    drawRolePick();
 
     var badges = {};
     P.queueFor(App.state, App.role, App.now()).forEach(function (q) { badges[q.tab] = (badges[q.tab] || 0) + q.count; });
@@ -129,6 +179,8 @@
     } catch (e) {
       html = '<div class="note bad">Could not draw this section: ' + App.esc(e.message) + "</div>";
     }
+    // Dates and record numbers in table cells stay on one line instead of breaking at the hyphen.
+    html = html.replace(/<td>(\d{4}-\d\d-\d\d|[A-Z]{2,4}-\d{4})<\/td>/g, '<td class="nw">$1</td>');
     document.getElementById("view").innerHTML = html;
     syncHash();
   };
@@ -205,6 +257,7 @@
     document.getElementById("roleSel").addEventListener("change", function (e) {
       App.role = e.target.value; save(); App.render();
     });
+    bindRolePick();
     document.getElementById("resetBtn").addEventListener("click", function () {
       App.reset(); App.toast("Demo data restored");
     });
