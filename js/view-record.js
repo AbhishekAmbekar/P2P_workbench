@@ -20,6 +20,7 @@
   App.openRecord = function (id) {
     id = String(id || "").trim().toUpperCase();
     App.sel.rec = id;
+    if (App.noteRecent) App.noteRecent(id);
     App.tab = HOME[id.split("-")[0]] || App.tab;
     App.render();
     window.scrollTo(0, 0);

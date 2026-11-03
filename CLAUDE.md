@@ -12,10 +12,12 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 
 ## Structure
 
-- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `seed.js`, `app.js`, `csv-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file.
+- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `search.js`, `seed.js`, `app.js`, `csv-ui.js`, `search-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file.
 - `js/data.js`: reference data. Thresholds, roles, cost centers and budgets, spend categories, suppliers, items.
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
 - `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
+- `js/search.js`: `P.search.search(state, query, now, tabs)` finds and ranks records, suppliers and screens. Pure. Every word must match; a full record number goes to the top. No SAP codes: the owner decided search only.
+- `js/search-ui.js`: the header search box and panel. Ctrl K, Cmd K or / opens it (/ only when not typing in a field). Recently opened records are kept under the separate key `p2p-workbench-recent`.
 - `js/seed.js`: builds the demo by running real engine actions with backdated times.
 - `js/app.js`: shell, the Working as menu (a button and list that open downward, with the hidden `#roleSel` select holding the value), sidebar sections (`App.tabs`, with `group` labels), saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
 - `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
@@ -51,20 +53,21 @@ State is saved in the browser under the key `p2p-workbench-v2`. If a change woul
 ```
 node tests/logic.test.js
 node tests/csv.test.js
+node tests/search.test.js
 ```
 
 The screen tests need jsdom installed in a folder outside the repo. Pass an absolute path, because the tests resolve it from the `tests` folder:
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
 
-Agreed order after the UI brainstorm: command bar (Ctrl+K search, with SAP style shortcuts such as ME21N and MIGO labeled as such), then dashboard charts in plain SVG. Then:
+Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Next: record numbers in every table as links to the record page. Then role focus: the sidebar splits into "Your work" and "View only" per role, each screen opens on that role's slice, view only screens say so, and the Director and VP get an oversight home. Then dashboard charts in plain SVG. Then:
 
 1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.
