@@ -596,5 +596,32 @@ test("the buyer queue shows how many POs need chasing", () => {
   assert.strictEqual(q.count, 3);
 });
 
+test("document flow links a PO to its request, PR, RFx, receipts and invoices from any of its ids", () => {
+  const s = seed(NOW);
+  ["REQ-1001", "PR-2001", "RFX-3001", "PO-4001", "GRN-5001", "po-4001"].forEach(id => {
+    const f = P.docFlow(s, id);
+    assert.ok(f, id + " should resolve");
+    assert.strictEqual(f.request.id, "REQ-1001", id);
+    assert.strictEqual(f.rfx.id, "RFX-3001", id);
+    assert.strictEqual(f.po.id, "PO-4001", id);
+    assert.deepStrictEqual(f.grns.map(g => g.id), ["GRN-5001"], id);
+  });
+  const paid = P.docFlow(s, "INV-6001");
+  assert.strictEqual(paid.po.id, "PO-4002");
+  assert.deepStrictEqual(paid.invoices.map(i => i.id), ["INV-6001"]);
+});
+
+test("document flow shows what does not exist yet, and unknown ids return nothing", () => {
+  const s = seed(NOW);
+  const pending = P.docFlow(s, "REQ-1012");
+  assert.strictEqual(pending.rfx, null);
+  assert.strictEqual(pending.po, null);
+  assert.deepStrictEqual(pending.grns, []);
+  const contract = P.docFlow(s, "PO-4004");
+  assert.strictEqual(contract.rfx, null);
+  assert.strictEqual(P.docFlow(s, "PO-9999"), null);
+  assert.strictEqual(P.docFlow(s, "hello"), null);
+});
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

@@ -38,7 +38,7 @@
       '<label>Role<select name="who">' + roleOpts + "</select></label></form>" +
       '<div class="wrap"><table><tr><th>When</th><th>Role</th><th>Record</th><th>Action</th><th>Detail</th></tr>' +
       (rows.length ? rows.map(function (a) {
-        return "<tr><td>" + esc(when(a.at)) + "</td><td>" + esc(P.roleLabel(a.role)) + "</td><td>" + esc(a.entity) + "</td><td>" + esc(a.action) +
+        return "<tr><td>" + esc(when(a.at)) + "</td><td>" + esc(P.roleLabel(a.role)) + "</td><td>" + App.recLink(a.entity) + "</td><td>" + esc(a.action) +
           '</td><td class="muted">' + esc(a.note) + "</td></tr>";
       }).join("") : '<tr><td colspan="5" class="empty">No entries match.</td></tr>') + "</table></div>" +
       '<p class="hint">Showing ' + rows.length + " of " + all.length + " entries" + (all.length > LIMIT ? " (latest " + LIMIT + ")" : "") + ".</p>";

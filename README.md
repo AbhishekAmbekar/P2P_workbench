@@ -36,6 +36,8 @@ Approval route: Manager always. Quality for items flagged for inspection. Engine
 
 - **CSV import and export.** Every screen with records has Export CSV, which downloads what sits behind that screen as a file Excel or Google Sheets can open. Six screens also have Import CSV, for data that usually arrives in a spreadsheet: requests (Requester), supplier quotes (Buyer), supplier date confirmations (Buyer), goods receipts (Warehouse), supplier invoices (Accounts Payable), and supplier emails (Buyer) or document renewals (Quality). Each row runs through the same rules and role check as the form. If any row fails, nothing is imported and every problem is listed by row. Each import has a template with the headings, and dates can be 2026-12-15 or 12/15/2026. Import adds new records and actions. It does not edit or delete existing records, and you cannot import POs, awards or approvals, because those are decisions made on the screen.
 
+- **Record pages.** Every request, PR, RFx, PO, receipt and invoice has its own page with its own link, such as `#PO-4001`. The page shows the key facts, the document flow from request to invoice with each step linked, and sections for details, price, approvals, receipts, invoices and history. Pages are for reading. The "Work on it" button opens the record on its own screen, where the actions are. The browser Back button returns to where you were.
+
 Delivery health on the dashboard compares each supplier promise date with the need by date. Under 5 days of slack is At Risk. Below zero is Late.
 
 ## Industry problems it responds to, and its limits
@@ -71,7 +73,7 @@ Plain HTML, CSS and JavaScript. No framework and no dependencies. The Inter font
 - `js/csv.js` reads and writes CSV, builds each export, and maps each import row to a workflow action.
 - `js/app.js` is the shell: role switching, tabs, saving, error messages.
 - `js/csv-ui.js` draws the CSV bar and import panel at the top of each screen.
-- `js/view-*.js` is one file per screen.
+- `js/view-*.js` is one file per screen. `js/view-record.js` draws the full page for any record.
 
 ## Tests
 
@@ -79,7 +81,7 @@ Plain HTML, CSS and JavaScript. No framework and no dependencies. The Inter font
 node tests/logic.test.js
 ```
 
-runs 46 checks on the workflow engine, and
+runs 48 checks on the workflow engine, and
 
 ```
 node tests/csv.test.js
@@ -89,10 +91,10 @@ runs 28 checks on CSV reading, writing, export and import. The screen tests driv
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
-`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick.
+`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address.
 
 ## Natural next steps
 

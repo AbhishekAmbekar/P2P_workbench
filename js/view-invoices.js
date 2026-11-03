@@ -90,7 +90,7 @@
   function exceptionCard(inv) {
     var ap = App.role === "ap";
     var owners = P.invOwners(inv);
-    var h = '<div class="card" style="margin-bottom:10px"><h3>' + inv.id + " / " + esc(inv.invNo) + " " + App.status("Exception") + "</h3>" +
+    var h = '<div class="card" style="margin-bottom:10px"><h3>' + inv.id + " / " + esc(inv.invNo) + " " + App.status("Exception") + App.recBtn(inv.id) + "</h3>" +
       '<p class="hint">' + esc(App.supplier(inv.supplierId).name) + ", " + inv.poId + ", billed " + App.money(inv.qty * inv.unitPrice) + ", due " + inv.dueDate + ".</p>" +
       compare(inv) + "<ul style=\"margin:6px 0 8px;padding-left:20px\">" + inv.match.issues.map(function (i) {
         return "<li>" + esc(i.msg) + " " + App.pill("Fix owner: " + OWNER_NAME[i.owner], "warn") + "</li>";
