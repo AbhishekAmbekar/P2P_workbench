@@ -101,7 +101,7 @@
       ["Estimated unit price", App.money(r.estUnit)], ["Approved value", App.money(total)],
       ["Need by", r.needBy], ["Site", r.site], ["Cost center", r.costCenter], ["Reason", r.reason]
     ];
-    var html = '<div class="card"><h3>' + r.id + (r.prNo ? " / " + r.prNo : "") + " " + App.status(r.status) + "</h3>" +
+    var html = '<div class="card"><h3>' + r.id + (r.prNo ? " / " + r.prNo : "") + " " + App.status(r.status) + App.recBtn(r.id) + "</h3>" +
       '<div class="form" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' + rows.map(function (x) {
         return "<div><div class=\"hint\">" + esc(x[0]) + "</div><div>" + esc(x[1]) + "</div></div>";
       }).join("") + "</div><h3 style=\"margin-top:14px\">Approval chain</h3>" + chainHtml(r) +
