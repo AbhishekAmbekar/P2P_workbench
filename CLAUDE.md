@@ -12,13 +12,14 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 
 ## Structure
 
-- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `seed.js`, `app.js`, `csv-ui.js`, the `view-*.js` files, then `App.start()`. Check for duplicate script tags when adding a file.
+- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `seed.js`, `app.js`, `csv-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file.
 - `js/data.js`: reference data. Thresholds, roles, cost centers and budgets, spend categories, suppliers, items.
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
 - `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
 - `js/seed.js`: builds the demo by running real engine actions with backdated times.
-- `js/app.js`: shell, role switch, tabs, saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
+- `js/app.js`: shell, role switch, sidebar sections (`App.tabs`, with `group` labels), saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
 - `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
+- `js/view-record.js`: the full page for one record (REQ, PR, RFX, PO, GRN, INV), built on `P.docFlow`. Read only. `App.openRecord(id)`, `App.recLink(id)` and `App.recBtn(id)` open it. The address shows `#tab` or `#PO-4001`, and opening a record adds a Back step.
 - `js/view-*.js`: one file per screen. Events use `data-act`, `data-form` and `data-change` attributes and `App.actions.*`.
 - `css/style.css`: styling, with dark mode. White and indigo theme, full width layout. Inter font, shipped in `fonts/` under the SIL Open Font License, so nothing loads from outside. Type sizes are the `--fs-*` variables, 14px base. `App.page` in `app.js` turns each screen's leading `<h2>` and `<p class="hint">` into the white header band with the CSV buttons. Keep the red, amber and green status colors as they are. The demo data note sits in the footer. `.wrap` around wide tables keeps phones from scrolling sideways.
 - `tests/`: engine checks and screen tests.
@@ -56,12 +57,14 @@ The screen tests need jsdom installed in a folder outside the repo. Pass an abso
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
+
+Agreed order after the UI brainstorm: command bar (Ctrl+K search, with SAP style shortcuts such as ME21N and MIGO labeled as such), then dashboard charts in plain SVG. Then:
 
 1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.

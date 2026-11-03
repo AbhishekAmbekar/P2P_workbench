@@ -80,7 +80,7 @@
 
   function detail(po) {
     var s = App.state, t = P.grnTotals(s, po.id), st = P.poStatus(s, po);
-    var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + "</h3>" +
+    var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + App.recBtn(po.id) + "</h3>" +
       '<p class="hint">' + esc(App.supplier(po.supplierId).name) + ", " + po.qty + " x " + esc(App.item(po.itemId).name) + ", promised " + po.promisedDate + ".</p>" +
       '<div class="chain">' + App.pill("Ordered " + po.qty, "info") + " " + App.pill("Accepted " + t.accepted, "ok") + " " +
       App.pill("On hold " + t.hold, t.hold ? "warn" : "mut") + " " + App.pill("Rejected " + t.rejected, t.rejected ? "bad" : "mut") + "</div>" +

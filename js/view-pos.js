@@ -92,7 +92,7 @@
       ["Site", po.site], ["From", r.id + " / " + r.prNo + (po.rfxId ? " / " + po.rfxId : "")],
       ["Received (accepted)", t.accepted + " of " + po.qty], ["On quality hold", t.hold], ["Rejected", t.rejected], ["Invoiced and matched", invoiced + " of " + po.qty]
     ];
-    var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + " " + (c.status !== "Delivered" ? App.status(c.status) : "") + "</h3>" +
+    var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + " " + (c.status !== "Delivered" ? App.status(c.status) : "") + App.recBtn(po.id) + "</h3>" +
       '<div class="form" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' + rows.map(function (x) {
         return '<div><div class="hint">' + esc(x[0]) + "</div><div>" + esc(x[1]) + "</div></div>";
       }).join("") + "</div>";

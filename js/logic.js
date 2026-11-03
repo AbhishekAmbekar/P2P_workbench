@@ -755,6 +755,29 @@
     return inv;
   }
 
+  // ---------- document flow ----------
+  // Every record linked to the one asked for, from the request to its invoices. Accepts a REQ, PR, RFX, PO, GRN or INV id.
+  // Returns null when the id is not on file.
+  function docFlow(s, id) {
+    id = String(id || "").trim().toUpperCase();
+    var find = function (list, key) { return list.find(function (x) { return x[key] === id; }) || null; };
+    var kind = id.split("-")[0], req = null, x = null, po = null, g, inv;
+    if (kind === "REQ") req = find(s.requests, "id");
+    else if (kind === "PR") req = find(s.requests, "prNo");
+    else if (kind === "RFX") { x = find(s.rfx, "id"); if (x) req = getReq(s, x.requestId); }
+    else if (kind === "PO") { po = find(s.pos, "id"); if (po) req = getReq(s, po.requestId); }
+    else if (kind === "GRN") { g = find(s.grns, "id"); if (g) { po = getPO(s, g.poId); req = getReq(s, po.requestId); } }
+    else if (kind === "INV") { inv = find(s.invoices, "id"); if (inv) { po = getPO(s, inv.poId); req = getReq(s, po.requestId); } }
+    if (!req) return null;
+    if (!x && req.rfxId) x = getRfx(s, req.rfxId);
+    if (!po && req.poId) po = getPO(s, req.poId);
+    return {
+      kind: kind, id: id, request: req, rfx: x, po: po,
+      grns: po ? s.grns.filter(function (r) { return r.poId === po.id; }) : [],
+      invoices: po ? s.invoices.filter(function (r) { return r.poId === po.id; }) : []
+    };
+  }
+
   // ---------- queues and metrics ----------
   function invOwners(inv) {
     if (inv.status !== "Exception") return [];
@@ -859,7 +882,7 @@
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
     rejectInvoice: rejectInvoice, payInvoice: payInvoice, invOwners: invOwners,
-    queueFor: queueFor, metrics: metrics,
+    queueFor: queueFor, metrics: metrics, docFlow: docFlow,
     // new in this version
     extendQuote: extendQuote, renewDoc: renewDoc, docIssues: docIssues, supplierDocs: supplierDocs, docAlerts: docAlerts,
     quoteLanded: quoteLanded, poLanded: poLanded, refPrice: refPrice, landedUnit: landedUnit,
