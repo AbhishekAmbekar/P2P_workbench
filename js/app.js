@@ -123,11 +123,24 @@
     var html;
     try {
       html = view ? view() : '<div class="card"><p class="empty">This section is not built yet.</p></div>';
-      if (App.csvBar) html = App.csvBar(App.tab) + html;
+      html = App.page(html);
     } catch (e) {
       html = '<div class="note bad">Could not draw this section: ' + App.esc(e.message) + "</div>";
     }
     document.getElementById("view").innerHTML = html;
+  };
+
+  // Every screen gets a white header band: the title, the short description under it, and the CSV buttons.
+  // Views keep returning "<h2>Title</h2><p class=hint>...</p>..." and this moves those two into the band.
+  App.page = function (html) {
+    var tab = App.tabs.find(function (t) { return t.id === App.tab; }), title = tab ? App.esc(tab.label) : "", sub = "";
+    var m = /^<h2>([\s\S]*?)<\/h2>/.exec(html);
+    if (m) { title = m[1]; html = html.slice(m[0].length); }
+    m = /^<p class="hint">([\s\S]*?)<\/p>/.exec(html);
+    if (m) { sub = m[1]; html = html.slice(m[0].length); }
+    var csv = App.csvParts ? App.csvParts(App.tab) : { bar: "", panel: "" };
+    return '<div class="band"><div class="bandrow"><div><h2>' + title + "</h2>" + (sub ? '<p class="bandsub">' + sub + "</p>" : "") + "</div>" +
+      csv.bar + "</div></div>" + (csv.panel ? '<div class="csvpanel">' + csv.panel + "</div>" : "") + '<div class="page">' + html + "</div>";
   };
 
   // ---------- events ----------
