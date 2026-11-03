@@ -19,8 +19,24 @@ body{margin:0;font:var(--fs-base)/1.5 Inter,"Segoe UI",system-ui,-apple-system,"
 .brand h1{margin:0;font-size:17px;font-weight:650;letter-spacing:.01em}
 .brand p{margin:0;font-size:12.5px;color:var(--mut)}
 .who{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.who label{color:var(--mut);font-size:12.5px}
-.who select{padding:5px 8px;font-size:13.5px}
+
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;padding:0}
+.wholbl{color:var(--mut);font-size:12.5px}
+.rolepick{position:relative}
+.rp-btn{display:flex;align-items:center;gap:10px;background:var(--card);color:var(--ink);border:1px solid var(--line);padding:5px 10px;font-size:13.5px;max-width:min(380px,80vw)}
+.rp-btn:hover{border-color:var(--mut)}
+.rp-btn #rpNow{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-btn b{font-weight:600}
+.rp-caret{flex:none;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);transition:transform .15s}
+.rolepick.open .rp-caret{transform:rotate(180deg)}
+.rp-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:30;min-width:100%;width:max-content;max-width:min(380px,92vw);max-height:70vh;overflow:auto;
+  list-style:none;margin:0;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(16,24,40,.14)}
+.rolepick.open .rp-menu{display:block}
+.rp-menu li{display:flex;flex-direction:column;padding:7px 10px;border-radius:6px;cursor:pointer;outline:none}
+.rp-menu li b{font-size:13.5px;font-weight:600}
+.rp-menu li span{font-size:12px;color:var(--mut)}
+.rp-menu li:hover,.rp-menu li:focus{background:var(--bg)}
+.rp-menu li.on{background:var(--accbg)}.rp-menu li.on b{color:var(--acc)}
 #resetBtn{padding:5px 12px;font-size:13px}
 select,input,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
 textarea{width:100%;min-height:60px;resize:vertical}
@@ -88,7 +104,7 @@ table{border-collapse:collapse;width:100%}
 th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
 td{font-size:var(--fs-md)}
 td button.small{min-width:92px}
-td:first-child{white-space:nowrap}
+td:first-child,td.nw{white-space:nowrap}
 th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);white-space:nowrap;background:var(--thbg)}
 tr:last-child td{border-bottom:0}
 tr.clickable{cursor:pointer}
@@ -130,7 +146,7 @@ tr.sel td{background:var(--infobg)}
 .csvpick label{font-size:13px;color:var(--mut);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .csvpick input[type=file]{max-width:100%;font:inherit;font-size:13px;color:var(--ink)}
 .foot{padding:14px var(--gut) 24px;color:var(--mut);font-size:12px;border-top:1px solid var(--line)}
-@media (max-width:600px){.brand p{display:none}.band{padding:12px var(--gut)}.band h2{font-size:18px}.kpi b{font-size:24px}}
+@media (max-width:600px){.rp-per{display:none}.rp-menu{left:0;right:auto;max-width:calc(100vw - 32px)}.brand p{display:none}.band{padding:12px var(--gut)}.band h2{font-size:18px}.kpi b{font-size:24px}}
 .queue li>:last-child{white-space:nowrap;flex-shrink:0}
 /* Record pages */
 a.rec,.crumb a,.fstep a{color:var(--acc);text-decoration:none;font-weight:500}
