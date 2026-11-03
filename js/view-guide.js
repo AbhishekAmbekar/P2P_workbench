@@ -44,6 +44,8 @@
         ])) +
       section("Delivery health",
         "<p>For every open PO, slack is the need by date minus the supplier promise date. Under 5 days is At Risk. Below zero is Late. Move a promise date on the PO screen to see the status change.</p>") +
+      section("Expedite and email drafts",
+        "<p>The Expedite tab lists open POs that need a nudge, worst first: overdue, late, at risk, then not confirmed. As the Buyer, pick one and the app writes a short chase message from the PO record. You can edit it, then open it in your own mail program, Gmail or Outlook, copy it, or download it as a draft file. The app never sends mail itself and cannot tell whether you sent it, so the audit trail records only that a draft was opened. Demo suppliers have no email address, so type one in and the app can remember it for that supplier.</p>") +
       section("Industry problems this addresses, and where it stops",
         list([
           "<b>Invoice exceptions.</b> One benchmark (Ardent Partners 2025, as quoted by Tellius) puts the average exception rate at 18.4% of invoices, mostly from missing receipts and quantity or price gaps. Here every exception names a fix owner, and the dashboard shows the first time match rate.",

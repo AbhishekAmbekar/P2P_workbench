@@ -512,5 +512,89 @@ test("the seed has expired and expiring supplier documents, and a tariff that re
   assert.strictEqual(s.rfx.find(r => r.id === "RFX-3004").quotes[0].validUntil, P.addDays("2026-10-26", -1));
 });
 
+// ---------- expedite list and email drafts ----------
+test("the expedite list ranks overdue, then late, then at risk, then unconfirmed, and skips received POs", () => {
+  const s = seed(NOW);
+  const rows = P.expediteList(s, NOW);
+  assert.deepStrictEqual(rows.map(r => r.po.id + ":" + r.kind), ["PO-4006:late", "PO-4007:risk", "PO-4001:risk"]);
+  assert.strictEqual(rows[0].left, 20);
+  assert.strictEqual(rows[0].value, 1840);
+  assert.ok(!rows.some(r => r.po.id === "PO-4002"), "a fully received PO must not be listed");
+  // the same PO a week later has passed its own promise date, which outranks everything else
+  const later = P.expediteList(s, "2026-11-12T14:00:00.000Z");
+  assert.strictEqual(later[0].kind, "overdue");
+  assert.ok(later[0].reason.indexOf("Promise date passed") === 0);
+});
+
+test("units already received or on quality hold are not counted as still due", () => {
+  const s = seed(NOW);
+  const row = P.expediteList(s, NOW).find(r => r.po.id === "PO-4001");
+  assert.strictEqual(row.left, 800);                              // 2000 ordered, 1200 accepted
+  const hold = P.expediteList(s, "2026-11-12T14:00:00.000Z").find(r => r.po.id === "PO-4003");
+  assert.strictEqual(hold, undefined, "goods on quality hold are already here, so nothing is still due from the supplier");
+});
+
+test("an issued PO with no confirmation after two days is listed as not confirmed", () => {
+  const s = P.newState();
+  const r = baseReq(s, { qty: 10, estUnit: 90, needBy: "2026-12-31" }); approveAll(s, r);
+  const po = P.createPO(s, "buyer", "2026-10-20T10:00:00.000Z", r.id, { supplierId: "atlas", unitPrice: 84, leadDays: 20 });
+  assert.strictEqual(P.expediteList(s, "2026-10-21T10:00:00.000Z").length, 0);
+  const row = P.expediteList(s, "2026-10-26T10:00:00.000Z")[0];
+  assert.strictEqual(row.kind, "confirm");
+  P.confirmPO(s, "buyer", "2026-10-26T11:00:00.000Z", po.id, po.promisedDate);
+  assert.strictEqual(P.expediteList(s, "2026-10-26T12:00:00.000Z").length, 0);
+});
+
+test("the chase draft uses the PO facts and the right wording for each situation", () => {
+  const s = seed(NOW);
+  const d = P.chaseDraft(s, "PO-4006", "late", "Jordan Lee");
+  assert.strictEqual(d.subject, "PO-4006: can the delivery date move up?");
+  ["Meridian MRO team", "20 cases of Grease cartridge, 400 g", "Promised: 3 Nov 2026", "Needed by: 29 Oct 2026", "Deliver to: Plant B", "Jordan Lee"]
+    .forEach(t => assert.ok(d.body.indexOf(t) >= 0, "missing: " + t));
+  assert.ok(P.chaseDraft(s, "PO-4006", "confirm", "J").subject.indexOf("please confirm") > 0);
+  assert.ok(P.chaseDraft(s, "PO-4006", "overdue", "J").body.indexOf("has passed") > 0);
+  assert.strictEqual(d.to, "", "demo suppliers have no saved address");
+});
+
+test("supplier addresses are validated, saved by the buyer only, and used in drafts", () => {
+  const s = seed(NOW);
+  throwsWith(() => P.setContact(s, "ap", NOW, "meridian", "a@b.co"), "cannot do this");
+  throwsWith(() => P.setContact(s, "buyer", NOW, "meridian", "not an email"), "does not look like an email");
+  P.setContact(s, "buyer", NOW, "meridian", " orders@example.com ");
+  assert.strictEqual(P.contactOf(s, "meridian"), "orders@example.com");
+  assert.strictEqual(P.chaseDraft(s, "PO-4006", "late", "J").to, "orders@example.com");
+  assert.strictEqual(P.expediteList(s, NOW)[0].email, "orders@example.com");
+  P.setContact(s, "buyer", NOW, "meridian", "");
+  assert.strictEqual(P.contactOf(s, "meridian"), "");
+  assert.strictEqual(P.contactOf({ audit: [] }, "meridian"), "", "old saved data without contacts still works");
+});
+
+test("mail links encode the draft, and long drafts are flagged", () => {
+  const l = P.mailLinks({ to: "a@b.co", subject: "PO-1: hi & bye", body: "Line one\nLine two" });
+  assert.ok(l.mailto.indexOf("mailto:a@b.co?subject=PO-1%3A%20hi%20%26%20bye&body=Line%20one%0D%0ALine%20two") === 0, l.mailto);
+  assert.ok(l.gmail.indexOf("https://mail.google.com/mail/?view=cm") === 0 && l.gmail.indexOf("to=a%40b.co") > 0);
+  assert.ok(l.outlook.indexOf("https://outlook.office.com/mail/deeplink/compose") === 0);
+  assert.strictEqual(l.tooLong, false);
+  assert.strictEqual(P.mailLinks({ to: "", subject: "x", body: "word ".repeat(400) }).tooLong, true);
+  const eml = P.emlText({ to: "a@b.co", subject: "S", body: "x\ny" });
+  assert.ok(eml.indexOf("To: a@b.co\r\nSubject: S\r\nX-Unsent: 1") === 0 && eml.endsWith("\r\n\r\nx\r\ny"));
+});
+
+test("opening a draft is logged as drafted, never as sent, and only the buyer can do it", () => {
+  const s = seed(NOW);
+  throwsWith(() => P.logChase(s, "warehouse", NOW, "PO-4006", "Gmail"), "cannot do this");
+  P.logChase(s, "buyer", NOW, "PO-4006", "Gmail");
+  const a = s.audit[s.audit.length - 1];
+  assert.ok(a.action.indexOf("Chase email drafted for Meridian MRO") === 0 && a.note.indexOf("cannot tell if it was sent") > 0);
+  assert.ok(!/sent to/i.test(a.action));
+  assert.strictEqual(P.lastChase(s, "PO-4006"), "2026-10-26");
+  assert.strictEqual(P.expediteList(s, NOW)[0].lastChase, "2026-10-26");
+});
+
+test("the buyer queue shows how many POs need chasing", () => {
+  const q = P.queueFor(seed(NOW), "buyer", NOW).find(i => i.tab === "expedite");
+  assert.strictEqual(q.count, 3);
+});
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

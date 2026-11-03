@@ -32,6 +32,8 @@ Approval route: Manager always. Quality for items flagged for inspection. Engine
 - **Supplier documents.** Quality certificate, origin declaration and (for raw materials and components) a sub tier disclosure, each with an expiry date. Expired or missing documents block awards and POs until Quality records a renewal on the Suppliers tab.
 - **Price against reference.** Every PO is compared with the contract or standard price. Above 10% it needs a written reason.
 
+- **Expedite and email drafts.** A ranked list of overdue, late, at risk and unconfirmed POs. The Buyer gets an editable chase message built from the PO, and opens it in their own mail program, Gmail or Outlook, copies it, or downloads a draft file. The app does not send mail and cannot tell if it was sent, so the audit trail says "drafted", never "sent". Sending from the app itself would need a small backend and is not built.
+
 Delivery health on the dashboard compares each supplier promise date with the need by date. Under 5 days of slack is At Risk. Below zero is Late.
 
 ## Industry problems it responds to, and its limits
@@ -73,11 +75,11 @@ Plain HTML, CSS and JavaScript. No framework and no dependencies.
 node tests/logic.test.js
 ```
 
-runs 38 checks on the workflow engine. The screen tests drive the real page in a simulated browser and need jsdom:
+runs 46 checks on the workflow engine. The screen tests drive the real page in a simulated browser and need jsdom:
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd ../p2p-workbench
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-e2e; do node tests/$f.js ../jsdom-tmp; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e; do node tests/$f.js ../jsdom-tmp; done
 ```
 
 `ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance.

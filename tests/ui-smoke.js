@@ -40,7 +40,7 @@ function submit(form) { form.dispatchEvent(new w.Event("submit", { bubbles: true
 // ---- shell and dashboard ----
 test("page loads with no script errors and shows the dashboard", () => {
   check(text().indexOf("desk") >= 0, "role desk card missing");
-  check($$("#tabs button").length === 9, "expected 9 tabs");
+  check($$("#tabs button").length === 10, "expected 10 tabs");
   check($("#roleSel").options.length === 9, "expected 9 roles");
 });
 

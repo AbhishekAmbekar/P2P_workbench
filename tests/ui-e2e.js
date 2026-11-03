@@ -123,7 +123,7 @@ test("9. dashboard counts moved and the guide renders", () => {
 });
 
 test("10. every tab renders without an error box, for every role", () => {
-  const tabs = ["dashboard", "requests", "rfx", "pos", "grn", "invoices", "suppliers", "audit", "guide"];
+  const tabs = ["dashboard", "requests", "rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit", "guide"];
   $("#roleSel") && [...$("#roleSel").options].forEach(o => {
     role(o.value);
     tabs.forEach(x => { tab(x); check(text().indexOf("Could not draw") < 0, o.value + " / " + x + ": " + text().slice(0, 120)); });
