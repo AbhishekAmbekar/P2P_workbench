@@ -63,7 +63,7 @@ Data is saved in your browser only. The Reset demo button restores the starting 
 
 ## How it is built
 
-Plain HTML, CSS and JavaScript. No framework and no dependencies.
+Plain HTML, CSS and JavaScript. No framework and no dependencies. The Inter font file is included in `fonts/` under the SIL Open Font License.
 
 - `js/data.js` holds reference data: roles, suppliers, items, budgets, thresholds.
 - `js/logic.js` is the workflow engine. Pure functions with no page code, so the same rules run in the browser and in tests.

@@ -98,13 +98,14 @@
       (r ? resultHtml(r) : "") + "</div>";
   }
 
-  App.csvBar = function (tab) {
+  // The buttons go in the screen's header band. The import panel, when open, goes just under it.
+  App.csvParts = function (tab) {
     var canExport = !!C.exports[tab], specs = C.importsFor(tab);
-    if (!canExport && !specs.length) return "";
+    if (!canExport && !specs.length) return { bar: "", panel: "" };
     var open = App.sel.csvOpen === tab && specs.length;
-    return '<div class="csvbar">' +
+    return { bar: '<div class="csvbar">' +
       (canExport ? '<button type="button" class="small ghost" data-act="csvExport" data-arg="' + tab + '">Export CSV</button>' : "") +
       (specs.length ? '<button type="button" class="small ghost" data-act="csvToggle" data-arg="' + tab + '">' + (open ? "Close import" : "Import CSV") + "</button>" : "") +
-      "</div>" + (open ? panel(tab, specs) : "");
+      "</div>", panel: open ? panel(tab, specs) : "" };
   };
 })();

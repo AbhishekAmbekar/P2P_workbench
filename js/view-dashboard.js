@@ -73,7 +73,8 @@
         }).join("") + "</ul>"
       : '<p class="empty">Nothing is waiting on you right now.</p>';
 
-    return '<div class="grid g2" style="margin-bottom:12px">' +
+    return "<h2>Dashboard</h2>" + '<p class="hint">' + "What is waiting on you, delivery health, budgets and spend.</p>" +
+      '<div class="grid g2" style="margin-bottom:12px">' +
       '<div class="card me"><h3>' + esc(role.label) + " desk</h3><p>" + esc(role.persona) + ". " + esc(role.desc) + "</p>" +
       '<div class="hint" style="margin-bottom:8px">You can: ' + esc(role.can) + "</div>" + queue + "</div>" +
       '<div class="card"><h3>Delivery health</h3><div class="grid g4" style="grid-template-columns:repeat(3,1fr)">' +

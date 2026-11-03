@@ -156,8 +156,8 @@
     var selId = App.sel.requests;
     var cur = s.requests.find(function (r) { return r.id === selId; });
 
-    var head = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
-      "<h2>Requests and PRs</h2>" +
+    var head = "<h2>Requests and PRs</h2>" +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">' +
       (App.role === "requester"
         ? '<button data-act="reqToggle">' + (App.sel.newReq ? "Close form" : "New request") + "</button>"
         : '<span class="hint">Switch to Requester to raise a request.</span>') + "</div>";
