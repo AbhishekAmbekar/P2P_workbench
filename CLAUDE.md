@@ -20,7 +20,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 - `js/app.js`: shell, role switch, tabs, saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
 - `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
 - `js/view-*.js`: one file per screen. Events use `data-act`, `data-form` and `data-change` attributes and `App.actions.*`.
-- `css/style.css`: styling, with dark mode. `.wrap` around wide tables keeps phones from scrolling sideways.
+- `css/style.css`: styling, with dark mode. White and indigo theme, full width layout, 14px base text. Keep the red, amber and green status colors as they are. The demo data note sits in the footer. `.wrap` around wide tables keeps phones from scrolling sideways.
 - `tests/`: engine checks and screen tests.
 
 ## Rules the app enforces (keep these true)
