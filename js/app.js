@@ -123,6 +123,7 @@
     var html;
     try {
       html = view ? view() : '<div class="card"><p class="empty">This section is not built yet.</p></div>';
+      if (App.csvBar) html = App.csvBar(App.tab) + html;
     } catch (e) {
       html = '<div class="note bad">Could not draw this section: ' + App.esc(e.message) + "</div>";
     }
