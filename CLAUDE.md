@@ -12,11 +12,13 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 
 ## Structure
 
-- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `seed.js`, `app.js`, the `view-*.js` files, then `App.start()`. Check for duplicate script tags when adding a file.
+- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `seed.js`, `app.js`, `csv-ui.js`, the `view-*.js` files, then `App.start()`. Check for duplicate script tags when adding a file.
 - `js/data.js`: reference data. Thresholds, roles, cost centers and budgets, spend categories, suppliers, items.
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
+- `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
 - `js/seed.js`: builds the demo by running real engine actions with backdated times.
 - `js/app.js`: shell, role switch, tabs, saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
+- `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
 - `js/view-*.js`: one file per screen. Events use `data-act`, `data-form` and `data-change` attributes and `App.actions.*`.
 - `css/style.css`: styling, with dark mode. `.wrap` around wide tables keeps phones from scrolling sideways.
 - `tests/`: engine checks and screen tests.
@@ -30,6 +32,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 - Receipts can be partial. Over receipt is blocked. Rejected units do not count as received. Units on quality hold count as received until Quality decides.
 - Invoices need an exact three way match: price to the cent, and quantity against accepted, not yet invoiced units. Duplicates are caught. Each exception names who can fix it.
 - Delivery health: slack is need by date minus promised date. Under 5 days is At Risk, below zero is Late.
+- CSV import only adds records through engine actions, as the role that owns the action. One failing row means nothing is imported. Import does not edit or delete records, and does not create POs, awards or approvals.
 - Email: the app never sends mail. It builds a draft and opens it in the user's own mail program, Gmail or Outlook, or copies it. The audit trail says "drafted", never "sent". Demo suppliers have no email address.
 
 ## Content rules
@@ -46,20 +49,21 @@ State is saved in the browser under the key `p2p-workbench-v2`. If a change woul
 
 ```
 node tests/logic.test.js
+node tests/csv.test.js
 ```
 
-The screen tests need jsdom installed in a folder outside the repo:
+The screen tests need jsdom installed in a folder outside the repo. Pass an absolute path, because the tests resolve it from the `tests` folder:
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e; do node tests/$f.js ../jsdom-tmp; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
 
-1. CSV import and export on every screen, and a way to start with an empty workspace.
+1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.
 3. Supplier scorecard from receipt and invoice history.
 4. Contracts with dates and remaining volume, blanket orders and releases.

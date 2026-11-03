@@ -96,3 +96,7 @@ tr.sel td{background:var(--infobg)}
 .legend .l-req::before{background:var(--infobg);border-color:var(--info)}
 .pct-bad{color:var(--bad);font-weight:600}
 .pct-warn{color:var(--warn);font-weight:600}
+.csvbar{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin:0 0 6px}
+.csvpick{align-items:center}
+.csvpick label{font-size:13px;color:var(--mut);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.csvpick input[type=file]{max-width:100%;font:inherit;font-size:13px;color:var(--ink)}

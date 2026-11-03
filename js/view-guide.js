@@ -46,6 +46,10 @@
         "<p>For every open PO, slack is the need by date minus the supplier promise date. Under 5 days is At Risk. Below zero is Late. Move a promise date on the PO screen to see the status change.</p>") +
       section("Expedite and email drafts",
         "<p>The Expedite tab lists open POs that need a nudge, worst first: overdue, late, at risk, then not confirmed. As the Buyer, pick one and the app writes a short chase message from the PO record. You can edit it, then open it in your own mail program, Gmail or Outlook, copy it, or download it as a draft file. The app never sends mail itself and cannot tell whether you sent it, so the audit trail records only that a draft was opened. Demo suppliers have no email address, so type one in and the app can remember it for that supplier.</p>") +
+      section("CSV import and export",
+        "<p>Every screen with records has Export CSV at the top. It downloads what sits behind that screen as a file a spreadsheet can open. The audit trail file has every entry, not only the latest 200.</p>" +
+        "<p>Some screens also have Import CSV, for data that usually arrives in a spreadsheet: requests, supplier quotes, supplier date confirmations, goods receipts, supplier invoices, supplier emails and document renewals. Switch to the role that does that job, open Import CSV, download the template and fill it in. " +
+        "Each row runs through the same rules as the form. If any row fails, nothing is imported and every problem is listed by row, so you can fix the file and try again. Import only adds. It does not change or delete records, and POs, awards and approvals are still done on the screen.</p>") +
       section("Industry problems this addresses, and where it stops",
         list([
           "<b>Invoice exceptions.</b> One benchmark (Ardent Partners 2025, as quoted by Tellius) puts the average exception rate at 18.4% of invoices, mostly from missing receipts and quantity or price gaps. Here every exception names a fix owner, and the dashboard shows the first time match rate.",
