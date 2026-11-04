@@ -28,6 +28,23 @@
     function quote(x, off, sup, price, lead, terms, extra) {
       P.addQuote(s, "buyer", T(off, 10), x.id, Object.assign({ supplierId: sup, unitPrice: price, leadDays: lead, terms: terms || "" }, extra || {}));
     }
+    // The technical reviewer for the item marks each offer. notOk maps a supplier to the reason its offer fails the spec.
+    function techReview(x, off, notOk) {
+      notOk = notOk || {};
+      x.quotes.forEach(function (q) {
+        var why = notOk[q.supplierId];
+        P.techEvaluate(s, x.techRole, T(off, 15), x.id, q.supplierId, why ? "Not acceptable" : "Acceptable", why || "Meets the spec and drawing revision");
+      });
+      P.techSubmit(s, x.techRole, T(off, 16), x.id);
+    }
+    // The Buyer recommends, then each approver in the chain signs off.
+    function awardTo(x, off, sup, why) {
+      P.recommendAward(s, "buyer", T(off, 10), x.id, sup, why || "");
+      var step;
+      while ((step = x.status === "Award pending approval" && x.awardApprovals.find(function (a) { return a.status === "Pending"; }))) {
+        P.decideAward(s, step.role, T(off, 15), x.id, "Approved", "Supplier choice and price are in line with the comparison");
+      }
+    }
     var W = { wPrice: 50, wLead: 25, wQuality: 25 };
     var rfxArgs = function (type, invited) { return Object.assign({ type: type, invited: invited }, W); };
 
@@ -39,7 +56,8 @@
     quote(x, -24, "helio", 40.8, 42, "Net 30");
     quote(x, -23, "brightpath", 44, 25, "Net 45");
     P.closeBidding(s, "buyer", T(-22), x.id);
-    P.award(s, "buyer", T(-21), x.id, "northfield", "");
+    techReview(x, -22);
+    awardTo(x, -21, "northfield");
     var po = P.createPO(s, "buyer", T(-20), r.id, {});
     P.confirmPO(s, "buyer", T(-19), po.id, D(10));
     P.postGRN(s, "warehouse", T(-1), po.id, { qty: 1200, result: "Accepted", note: "First truck. Count matches the shipping notice." });
@@ -52,7 +70,8 @@
     quote(x, -40, "northfield", 1460, 14, "Net 45");
     quote(x, -39, "helio", 1440, 25, "Net 30");
     P.closeBidding(s, "buyer", T(-38), x.id);
-    P.award(s, "buyer", T(-37), x.id, "northfield", "");
+    techReview(x, -38);
+    awardTo(x, -37, "northfield");
     po = P.createPO(s, "buyer", T(-36), r.id, {});
     P.confirmPO(s, "buyer", T(-35), po.id, D(-22));
     P.postGRN(s, "warehouse", T(-21), po.id, { qty: 12, result: "Accepted", note: "All drums sealed, certificates attached." });
@@ -66,7 +85,8 @@
     P.confirmPO(s, "buyer", T(-11), po.id, D(-2));
     P.postGRN(s, "warehouse", T(-2), po.id, { qty: 20, result: "Hold", note: "Film thickness out of spec on 3 rolls. Waiting for incoming inspection." });
 
-    // D. Control boards: bids are in, one bidder is not qualified. Ready to award.
+    // D. Control boards: bids are in. Engineering found one offer off spec, and that bidder is not qualified anyway.
+    //    Ready for the Buyer's award recommendation.
     r = req(-14, "Tom Becker", "CP-202", 40, 640, 40, "Plant B", "CC-200 Engineering", "Control board build for the pilot run");
     approveAll(r, -12);
     x = P.startRFx(s, "buyer", T(-10), r.id, rfxArgs("RFP", ["brightpath", "pinecrest", "orbit"]));
@@ -74,6 +94,7 @@
     quote(x, -7, "pinecrest", 610, 35, "Net 60", { tariffPct: 12, freight: 6 });
     quote(x, -7, "orbit", 590, 18, "Net 30", { tariffPct: 25 });
     P.closeBidding(s, "buyer", T(-2), x.id);
+    techReview(x, -1, { orbit: "Board revision B offered. The spec calls for revision C with the added fuse." });
 
     // E. Support rails: RFQ open, only one quote back so far.
     r = req(-9, "Luis Romero", "CP-201", 500, 38, 45, "Field Service", "CC-300 Maintenance", "Warehouse racking expansion, rows 14 to 18");
@@ -127,7 +148,8 @@
     quote(x, -5, "helio", 205, 40, "Net 30", { tariffPct: 12 });
     quote(x, -5, "brightpath", 219, 24, "Net 45");
     P.closeBidding(s, "buyer", T(-4), x.id);
-    P.award(s, "buyer", T(-3), x.id, "brightpath", "");
+    techReview(x, -4);
+    awardTo(x, -3, "brightpath");
 
     // N. Fastener kits: direct buy from a qualified supplier, delivery at risk.
     r = req(-10, "Maya Chen", "MR-405", 40, 84, 4, "Plant A", "CC-300 Maintenance", "Shutdown maintenance kits");

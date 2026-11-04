@@ -26,6 +26,19 @@ function baseReq(s, over) {
     site: "Plant A", costCenter: "CC-300 Maintenance", reason: "Test request"
   }, over || {}));
 }
+// The item's technical reviewer marks every quote. notOk maps a supplier to the reason its offer fails the spec.
+function techOK(s, x, notOk) {
+  notOk = notOk || {};
+  x.quotes.forEach(q => P.techEvaluate(s, x.techRole, NOW, x.id, q.supplierId, notOk[q.supplierId] ? "Not acceptable" : "Acceptable", notOk[q.supplierId] || ""));
+  P.techSubmit(s, x.techRole, NOW, x.id);
+}
+// The Buyer recommends, then each approver in the chain signs off.
+function award(s, now, x, sup, why) {
+  P.recommendAward(s, "buyer", now, x.id, sup, why);
+  let st;
+  while (x.status === "Award pending approval" && (st = x.awardApprovals.find(a => a.status === "Pending"))) P.decideAward(s, st.role, now, x.id, "Approved", "");
+  return x;
+}
 function approveAll(s, r) {
   let st;
   while ((st = r.approvals.find(a => a.status === "Pending"))) P.decide(s, st.role, NOW, r.id, "Approved", "ok");
@@ -112,14 +125,15 @@ test("award rules: bidding must close, unqualified blocked, off ranking needs ju
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 212, leadDays: 28 });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, leadDays: 40 });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "orbit", unitPrice: 150, leadDays: 10 });
-  throwsWith(() => P.award(s, "buyer", NOW, x.id, "northfield", ""), "Close bidding");
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "northfield", ""), "Close bidding");
   P.closeBidding(s, "buyer", NOW, x.id);
+  techOK(s, x);
   throwsWith(() => P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 1, leadDays: 1 }), "closed");
-  throwsWith(() => P.award(s, "buyer", NOW, x.id, "orbit", "cheapest by far"), "not qualified");
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "orbit", "cheapest by far"), "not qualified");
   const top = P.scoreRFx(x).filter(q => q.eligible)[0].supplierId;
   const other = top === "northfield" ? "helio" : "northfield";
-  throwsWith(() => P.award(s, "buyer", NOW, x.id, other, ""), "justification");
-  P.award(s, "buyer", NOW, x.id, top, "");
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, other, ""), "justification");
+  award(s, NOW, x, top, "");
   assert.strictEqual(x.status, "Awarded");
   assert.strictEqual(r.status, "Awarded");
 });
@@ -131,9 +145,127 @@ test("conditional supplier and single bid both need a justification", () => {
   const x = P.startRFx(s, "buyer", NOW, r.id, Object.assign({ type: "RFQ", invited: ["kestrel", "northfield"] }, W));
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "kestrel", unitPrice: 70, leadDays: 20 });
   P.closeBidding(s, "buyer", NOW, x.id);
-  throwsWith(() => P.award(s, "buyer", NOW, x.id, "kestrel", ""), "conditional supplier, only one bid");
-  P.award(s, "buyer", NOW, x.id, "kestrel", "Only bidder, extra incoming inspection planned");
+  techOK(s, x);
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "kestrel", ""), "conditional supplier, only one bid");
+  award(s, NOW, x, "kestrel", "Only bidder, extra incoming inspection planned");
   assert.strictEqual(x.award.supplierId, "kestrel");
+});
+
+// ---------- technical evaluation and award approval ----------
+function rfxFor(itemId, qty, estUnit, invited) {
+  const s = P.newState();
+  const r = baseReq(s, { itemId, qty, estUnit });
+  approveAll(s, r);
+  const x = P.startRFx(s, "buyer", NOW, r.id, Object.assign({ type: "RFQ", invited }, W));
+  return { s, r, x };
+}
+
+test("closing bidding sends the RFx to the right technical reviewer for the item", () => {
+  [["CP-104", 60, 215, "engineering"], ["RM-101", 300, 42, "quality"], ["MR-203", 20, 910, "requester"]].forEach(([item, q, p, who]) => {
+    const { s, x } = rfxFor(item, q, p, item === "MR-203" ? ["atlas", "meridian"] : ["northfield", "helio"]);
+    x.invited.forEach(id => P.addQuote(s, "buyer", NOW, x.id, { supplierId: id, unitPrice: p, leadDays: 20 }));
+    P.closeBidding(s, "buyer", NOW, x.id);
+    assert.strictEqual(x.status, "Technical review", item);
+    assert.strictEqual(x.techRole, who, item);
+  });
+});
+
+test("only the reviewer evaluates, a failed offer needs a reason, and every quote must be done", () => {
+  const { s, x } = rfxFor("CP-104", 60, 215, ["northfield", "helio"]);
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 212, leadDays: 28 });
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, leadDays: 40 });
+  throwsWith(() => P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Acceptable", ""), "not waiting for a technical evaluation");
+  P.closeBidding(s, "buyer", NOW, x.id);
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "northfield", ""), "with the Engineering");
+  throwsWith(() => P.techEvaluate(s, "buyer", NOW, x.id, "helio", "Acceptable", ""), "cannot do this");
+  throwsWith(() => P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Not acceptable", ""), "does not meet the spec");
+  P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Not acceptable", "Wall thickness 2 mm, drawing needs 3 mm");
+  throwsWith(() => P.techSubmit(s, "engineering", NOW, x.id), "Still open: Northfield Metals");
+  P.techEvaluate(s, "engineering", NOW, x.id, "northfield", "Acceptable", "");
+  P.techSubmit(s, "engineering", NOW, x.id);
+  assert.strictEqual(x.status, "Evaluating");
+  assert.ok(s.audit.some(a => a.action === "Technical recommendation sent to the Buyer" && a.note.indexOf("1 of 2") === 0));
+});
+
+test("an offer that fails the technical check cannot win, even if it scores best", () => {
+  const { s, x } = rfxFor("CP-104", 60, 215, ["northfield", "helio"]);
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 212, leadDays: 28 });
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 150, leadDays: 10 });
+  P.closeBidding(s, "buyer", NOW, x.id);
+  techOK(s, x, { helio: "Wrong alloy grade offered" });
+  const ranked = P.scoreRFx(x, s, NOW);
+  assert.strictEqual(ranked[0].supplierId, "helio", "cheapest still ranks first on score");
+  assert.strictEqual(ranked[0].eligible, false);
+  assert.strictEqual(ranked[0].techNote, "Wrong alloy grade offered");
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "helio", "Cheapest by far, worth a look"), "not technically acceptable: Wrong alloy grade offered");
+  award(s, NOW, x, "northfield", "");
+  assert.strictEqual(x.status, "Awarded", "the top acceptable offer needs no justification");
+});
+
+test("award approval: Director always, Executive from $50,000 or for a risky pick, in order", () => {
+  const small = rfxFor("CP-104", 60, 215, ["northfield", "helio"]);
+  ["northfield", "helio"].forEach((id, i) => P.addQuote(small.s, "buyer", NOW, small.x.id, { supplierId: id, unitPrice: 212 + i * 20, leadDays: 28 }));
+  P.closeBidding(small.s, "buyer", NOW, small.x.id); techOK(small.s, small.x);
+  P.recommendAward(small.s, "buyer", NOW, small.x.id, "northfield", "");
+  assert.deepStrictEqual(small.x.awardApprovals.map(a => a.role), ["director"], "clean $12,720 award");
+  assert.strictEqual(small.r.status, "Sourcing", "not awarded until approved");
+  throwsWith(() => P.createPO(small.s, "buyer", NOW, small.r.id, {}), "must be approved");
+
+  const big = rfxFor("RM-101", 1500, 42, ["northfield", "helio"]);
+  ["northfield", "helio"].forEach((id, i) => P.addQuote(big.s, "buyer", NOW, big.x.id, { supplierId: id, unitPrice: 41 + i, leadDays: 20 }));
+  P.closeBidding(big.s, "buyer", NOW, big.x.id); techOK(big.s, big.x);
+  P.recommendAward(big.s, "buyer", NOW, big.x.id, "northfield", "");
+  assert.deepStrictEqual(big.x.awardApprovals.map(a => a.role), ["director", "executive"], "$61,500 award");
+  throwsWith(() => P.decideAward(big.s, "executive", NOW, big.x.id, "Approved", ""), "belongs to the Director");
+  P.decideAward(big.s, "director", NOW, big.x.id, "Approved", "");
+  assert.strictEqual(big.x.status, "Award pending approval");
+  P.decideAward(big.s, "executive", NOW, big.x.id, "Approved", "");
+  assert.strictEqual(big.x.status, "Awarded");
+  assert.strictEqual(big.x.award.approvals.length, 2);
+
+  const single = rfxFor("CP-301", 200, 76, ["kestrel", "northfield"]);
+  P.addQuote(single.s, "buyer", NOW, single.x.id, { supplierId: "kestrel", unitPrice: 70, leadDays: 20 });
+  P.closeBidding(single.s, "buyer", NOW, single.x.id); techOK(single.s, single.x);
+  P.recommendAward(single.s, "buyer", NOW, single.x.id, "kestrel", "Only bidder, extra incoming inspection planned");
+  assert.deepStrictEqual(single.x.awardApprovals.map(a => a.role), ["director", "executive"], "single bid from a conditional supplier escalates");
+  assert.deepStrictEqual(single.x.recommendation.reasons, ["conditional supplier", "only one bid"]);
+});
+
+test("a rejected award goes back to the Buyer with the reason on record", () => {
+  const { s, r, x } = rfxFor("CP-104", 60, 215, ["northfield", "helio"]);
+  ["northfield", "helio"].forEach((id, i) => P.addQuote(s, "buyer", NOW, x.id, { supplierId: id, unitPrice: 212 + i * 20, leadDays: 28 }));
+  P.closeBidding(s, "buyer", NOW, x.id); techOK(s, x);
+  P.recommendAward(s, "buyer", NOW, x.id, "northfield", "");
+  throwsWith(() => P.decideAward(s, "director", NOW, x.id, "Rejected", ""), "reason");
+  P.decideAward(s, "director", NOW, x.id, "Rejected", "Ask both for a firm delivery date first");
+  assert.strictEqual(x.status, "Evaluating");
+  assert.strictEqual(x.recommendation, null);
+  assert.strictEqual(x.pastRecommendations[0].approvals[0].comment, "Ask both for a firm delivery date first");
+  assert.strictEqual(r.status, "Sourcing");
+  award(s, NOW, x, "northfield", "");
+  assert.strictEqual(r.status, "Awarded");
+});
+
+test("queues show technical reviews and award approvals to the right role", () => {
+  const { s, x } = rfxFor("CP-104", 60, 215, ["northfield", "helio"]);
+  ["northfield", "helio"].forEach((id, i) => P.addQuote(s, "buyer", NOW, x.id, { supplierId: id, unitPrice: 212 + i * 20, leadDays: 28 }));
+  P.closeBidding(s, "buyer", NOW, x.id);
+  const count = (role, label) => (P.queueFor(s, role, NOW).find(q => q.label === label) || { count: 0 }).count;
+  assert.strictEqual(count("engineering", "RFx waiting for your technical evaluation"), 1);
+  assert.strictEqual(count("quality", "RFx waiting for your technical evaluation"), 0);
+  techOK(s, x);
+  P.recommendAward(s, "buyer", NOW, x.id, "northfield", "");
+  assert.strictEqual(count("director", "Awards waiting for your approval"), 1);
+  assert.strictEqual(count("executive", "Awards waiting for your approval"), 0);
+});
+
+test("an RFx saved before technical reviews existed can still be awarded", () => {
+  const { s, x } = rfxFor("CP-104", 60, 215, ["northfield", "helio"]);
+  ["northfield", "helio"].forEach((id, i) => P.addQuote(s, "buyer", NOW, x.id, { supplierId: id, unitPrice: 212 + i * 20, leadDays: 28 }));
+  x.status = "Evaluating";   // as an older saved RFx: closed straight to Evaluating, no techRole
+  assert.ok(P.scoreRFx(x, s, NOW).every(q => q.eligible));
+  award(s, NOW, x, "northfield", "");
+  assert.strictEqual(x.status, "Awarded");
 });
 
 // ---------- 3. PO policy ----------
@@ -407,15 +539,16 @@ test("a quote cannot be entered already expired, and an expired quote cannot be 
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 200, leadDays: 20, validUntil: day(1) });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 230, leadDays: 25, validUntil: day(30) });
   P.closeBidding(s, "buyer", NOW, x.id);
+  techOK(s, x);
   const later = at(5);
   assert.strictEqual(P.scoreRFx(x, s, later).find(q => q.supplierId === "northfield").expired, true);
-  throwsWith(() => P.award(s, "buyer", later, x.id, "northfield", ""), "expired on");
+  throwsWith(() => P.recommendAward(s, "buyer", later, x.id, "northfield", ""), "expired on");
   throwsWith(() => P.extendQuote(s, "requester", later, x.id, "northfield", day(20), "Confirmed by email"), "cannot do this");
   throwsWith(() => P.extendQuote(s, "buyer", later, x.id, "northfield", day(20), ""), "how the supplier confirmed");
   throwsWith(() => P.extendQuote(s, "buyer", later, x.id, "northfield", day(1), "Confirmed by email"), "in the past");
   throwsWith(() => P.extendQuote(s, "buyer", later, x.id, "helio", day(10), "Confirmed by email"), "later than");
   P.extendQuote(s, "buyer", later, x.id, "northfield", day(20), "Confirmed by email");
-  P.award(s, "buyer", later, x.id, "northfield", "");
+  award(s, later, x, "northfield", "");
   assert.strictEqual(x.status, "Awarded");
 });
 
@@ -425,7 +558,8 @@ test("an awarded quote that lapses before the PO blocks the PO until revalidated
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 200, leadDays: 20, validUntil: day(2) });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 230, leadDays: 25, validUntil: day(2) });
   P.closeBidding(s, "buyer", NOW, x.id);
-  P.award(s, "buyer", NOW, x.id, "northfield", "");
+  techOK(s, x);
+  award(s, NOW, x, "northfield", "");
   throwsWith(() => P.createPO(s, "buyer", at(6), r.id, {}), "expired on");
   P.extendQuote(s, "buyer", at(6), x.id, "northfield", day(15), "Supplier agreed by phone");
   assert.ok(P.createPO(s, "buyer", at(6), r.id, {}).id);
@@ -438,16 +572,17 @@ test("an expired document blocks an award, and Quality renewing it unblocks it",
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 200, leadDays: 20 });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 230, leadDays: 25 });
   P.closeBidding(s, "buyer", NOW, x.id);
+  techOK(s, x);
   s.docs.northfield.subtier = day(-1);
   const ranked = P.scoreRFx(x, s, NOW);
   assert.strictEqual(ranked.find(q => q.supplierId === "northfield").eligible, false);
-  throwsWith(() => P.award(s, "buyer", NOW, x.id, "northfield", ""), "Sub-tier disclosure expired on");
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "northfield", ""), "Sub-tier disclosure expired on");
   throwsWith(() => P.renewDoc(s, "buyer", NOW, "northfield", "subtier", day(300), "Reviewed new disclosure"), "cannot do this");
   throwsWith(() => P.renewDoc(s, "quality", NOW, "northfield", "subtier", day(-1), "Reviewed new disclosure"), "in the future");
   throwsWith(() => P.renewDoc(s, "quality", NOW, "northfield", "subtier", day(300), ""), "what was checked");
   P.renewDoc(s, "quality", NOW, "northfield", "subtier", day(300), "Reviewed new disclosure, ref SD-2291");
   assert.ok(s.audit.some(a => a.action.indexOf("Document renewed") === 0));
-  P.award(s, "buyer", NOW, x.id, "northfield", "");
+  award(s, NOW, x, "northfield", "");
   assert.strictEqual(x.status, "Awarded");
 });
 

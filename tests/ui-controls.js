@@ -79,7 +79,9 @@ test("a lapsed document blocks the award, and only Quality can renew it", () => 
     var x=P.startRFx(s,"buyer",n,"${id}",{type:"RFQ",invited:["cobaltridge","northfield"],wPrice:50,wLead:25,wQuality:25});
     P.addQuote(s,"buyer",n,x.id,{supplierId:"cobaltridge",unitPrice:40,leadDays:20});
     P.addQuote(s,"buyer",n,x.id,{supplierId:"northfield",unitPrice:41.5,leadDays:25});
-    P.closeBidding(s,"buyer",n,x.id); return x.id; })()`);
+    P.closeBidding(s,"buyer",n,x.id);
+    x.quotes.forEach(function(q){ P.techEvaluate(s,x.techRole,n,x.id,q.supplierId,"Acceptable",""); }); P.techSubmit(s,x.techRole,n,x.id);
+    return x.id; })()`);
   role("buyer"); tab("rfx"); click(rowOf(rfx));
   check(text().indexOf("Documents expired") >= 0, "pill missing");
   check($$('#view button[data-act="rfxAward"]').length === 1, "only Northfield should be awardable");

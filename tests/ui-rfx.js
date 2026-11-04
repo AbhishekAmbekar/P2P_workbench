@@ -66,38 +66,74 @@ test("quotes can be recorded and revised, and an uninvited price is validated", 
   check(btn("Close bidding and compare") && !btn("Close bidding and compare").disabled);
 });
 
-test("closing bidding shows a scored comparison and an award button per eligible supplier", () => {
+// The technical reviewer marks every offer acceptable, then sends the recommendation to the Buyer.
+function techAllOk() {
+  $$('form[data-form="rfxTech"]').forEach((f, i) => {
+    const form = $$('form[data-form="rfxTech"]')[i];
+    form.elements.result.value = "Acceptable";
+    submit(form);
+  });
+  click(btn("Send to the Buyer"));
+}
+
+test("closing bidding sends the RFx to the technical reviewer before any award", () => {
   click(btn("Close bidding and compare"));
-  check(text().indexOf("Top eligible quote") >= 0, "comparison missing");
-  check($$('#view button[data-act="rfxAward"]').length === 3);
   check(toastText().indexOf("Bidding closed") >= 0);
+  check(text().indexOf("Technical evaluation by Requester") >= 0, "reviewer missing");
+  check($$('#view button[data-act="rfxAward"]').length === 0, "no award buttons during technical review");
+  check(text().indexOf("Waiting for the Requester") >= 0, "buyer is told who is next");
 });
 
-test("awarding the top scored supplier needs no note, off ranking needs one", () => {
-  const awards = $$('#view button[data-act="rfxAward"]');
-  click(awards[2]);
+test("the reviewer must give a reason for a failed offer and evaluate every offer before sending", () => {
+  role("requester"); tab("rfx"); openRfx("RFX-3006");
+  check($$('form[data-form="rfxTech"]').length === 3, "one row per offer");
+  check(btn("Send to the Buyer").disabled, "send is disabled until all are done");
+  const f = $$('form[data-form="rfxTech"]')[0];
+  f.elements.result.value = "Not acceptable"; f.elements.note.value = "";
+  submit(f);
+  check(toastText().indexOf("does not meet the spec") >= 0, "toast: " + toastText());
+  techAllOk();
+  check(toastText().indexOf("Technical recommendation sent to the Buyer") >= 0, "toast: " + toastText());
+});
+
+test("the Buyer recommends among acceptable offers, and off ranking needs a note", () => {
+  role("buyer"); tab("rfx"); openRfx("RFX-3006");
+  check(text().indexOf("Top eligible quote") >= 0, "comparison missing");
+  const recs = $$('#view button[data-act="rfxAward"]');
+  check(recs.length === 3 && recs[0].textContent === "Recommend", "three Recommend buttons");
+  click(recs[2]);
   check(toastText().indexOf("justification") >= 0, "toast: " + toastText());
   $("#awardNote").value = "";
   click($$('#view button[data-act="rfxAward"]')[0]);
-  check(toastText().indexOf("Awarded to") >= 0, "toast: " + toastText());
-  check(text().indexOf("Awarded to") >= 0);
+  check(toastText().indexOf("sent for approval: Director.") >= 0, "a clean $19,600 award goes to the Director only: " + toastText());
+  check(text().indexOf("Award pending approval") >= 0 && text().indexOf("Waiting for the Director") >= 0);
 });
 
-test("a supplier that is not qualified cannot be awarded", () => {
+test("the Director approves the award, and only then can a PO follow", () => {
+  role("director"); tab("rfx"); openRfx("RFX-3006");
+  click(btn("Reject, back to the Buyer"));
+  check(toastText().indexOf("reason") >= 0, "a rejection needs a reason");
+  click(btn("Approve award"));
+  check(toastText().indexOf("Award approved") >= 0, "toast: " + toastText());
+  role("buyer"); tab("rfx"); openRfx("RFX-3006");
+  check(text().indexOf("Awarded to") >= 0 && btn("Create the PO"), "award stands, PO can be created");
+});
+
+test("an offer that failed the technical check cannot be recommended", () => {
   openRfx("RFX-3003");
-  check(text().indexOf("Cannot award") >= 0, "orbit should be blocked");
-  const orbitRow = $$("#view table tr").find(r => r.textContent.indexOf("Orbit Controls") >= 0 && r.textContent.indexOf("Cannot award") >= 0);
-  check(orbitRow, "orbit row with block missing");
+  const orbitRow = $$("#view table tr").find(r => r.textContent.indexOf("Orbit Controls") >= 0);
+  check(orbitRow && orbitRow.textContent.indexOf("Not acceptable") >= 0 && orbitRow.textContent.indexOf("revision C") >= 0, "technical note shown");
+  check(orbitRow.textContent.indexOf("Fails spec") >= 0 && !orbitRow.querySelector('button[data-act="rfxAward"]'), "orbit should be blocked");
 });
 
-test("a conditional supplier needs a written justification", () => {
+test("a conditional supplier needs a written justification and goes to the Executive too", () => {
   role("buyer"); tab("rfx"); openRfx("RFX-3003");
   const pine = $$("#view table tr").find(r => r.textContent.indexOf("Pinecrest") >= 0);
   click(pine.querySelector('button[data-act="rfxAward"]'));
   check(toastText().indexOf("justification") >= 0, "toast: " + toastText());
   $("#awardNote").value = "Only supplier with the required lead time on control boards";
   click($$("#view table tr").find(r => r.textContent.indexOf("Pinecrest") >= 0).querySelector('button[data-act="rfxAward"]'));
-  check(toastText().indexOf("Awarded to Pinecrest") >= 0, "toast: " + toastText());
+  check(toastText().indexOf("Director, then Executive") >= 0, "toast: " + toastText());
 });
 
 test("other roles see the comparison but no quote form or award buttons", () => {

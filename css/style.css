@@ -167,6 +167,7 @@ a.rec:hover,.crumb a:hover,.fstep a:hover{text-decoration:underline}
 .fstep.next{border-style:dashed;background:transparent}.fstep.next b{color:var(--mut);font-weight:500}
 .secs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(520px,100%),1fr));gap:16px;align-items:start}
 .sec{padding:0;overflow:hidden}
+.sec.full{grid-column:1 / -1}
 .sec h3{display:flex;align-items:baseline;gap:8px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line)}
 .sec h3 small{margin-left:auto;font-weight:400;font-size:var(--fs-sm);color:var(--mut)}
 .pad{padding:14px 16px;margin:0}
@@ -265,3 +266,6 @@ body.sp-on{overflow:hidden}
 .tip{position:fixed;z-index:50;display:none;max-width:280px;padding:6px 9px;border-radius:6px;background:var(--ink);color:#fff;font-size:12px;line-height:1.35;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.18)}
 @media (max-width:600px){.hb-row{grid-template-columns:1fr auto;row-gap:4px}.hb-row .hb-track{grid-column:1 / -1;grid-row:2}
   .cc-x span{font-size:10px}.cc-x b{font-size:11px}.ch-cols{height:150px}}
+.nw{white-space:nowrap}
+.techrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.techrow input{flex:1;min-width:180px}

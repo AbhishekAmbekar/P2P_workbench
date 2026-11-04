@@ -45,8 +45,8 @@
       return "<dt>" + esc(r[0]) + "</dt><dd>" + r[1] + "</dd>";
     }).join("") + "</dl>";
   }
-  function section(title, body, note) {
-    return '<div class="card sec"><h3>' + esc(title) + (note ? "<small>" + esc(note) + "</small>" : "") + "</h3>" + body + "</div>";
+  function section(title, body, note, full) {
+    return '<div class="card sec' + (full ? " full" : "") + '"><h3>' + esc(title) + (note ? "<small>" + esc(note) + "</small>" : "") + "</h3>" + body + "</div>";
   }
   function table(head, rows, empty) {
     if (!rows.length) return '<p class="empty pad">' + esc(empty) + "</p>";
@@ -126,6 +126,11 @@
       section("History", '<div class="pad">' + history([r.id]) + "</div>", "From the audit trail") + "</div></div>";
   }
 
+  function approvalText(list) {
+    if (!list) return "";
+    return list.map(function (a) { return esc(P.roleLabel(a.role)) + " " + App.status(a.status) + (a.at ? " " + day(a.at) : ""); }).join(" &middot; ");
+  }
+
   function rfxPage(f, id) {
     var x = f.rfx, r = f.request, it = App.item(r.itemId), ranked = P.scoreRFx(x, App.state, App.now());
     var aw = x.award ? App.supplier(x.award.supplierId).name : null;
@@ -135,12 +140,22 @@
       facts: [["Invited", String(x.invited.length)], ["Quotes in", String(x.quotes.length)], ["Weights", x.weights.price + " / " + x.weights.lead + " / " + x.weights.quality],
         ["Best landed", ranked.length ? money(Math.min.apply(null, ranked.map(function (q) { return q.landed; }))) : "None yet"], ["Awarded to", aw ? esc(aw) : "Not yet"], ["Opened", day(x.createdAt)]]
     }) + '<div class="page"><div class="secs">' +
-      section("Ranking", table(["#", "Supplier", "Status", "#Landed", "#Lead days", "Valid until", "#Score", "Can win"], ranked.map(function (q, i) {
-        var can = q.eligible ? (q.expired ? App.pill("Quote expired", "warn") : App.pill("Yes", "ok")) : App.pill(q.supplierStatus === "Not qualified" ? "Not qualified" : "Documents", "bad");
+      section("Ranking", table(["#", "Supplier", "Status", "Technical", "#Landed", "#Lead days", "Valid until", "#Score", "Can win"], ranked.map(function (q, i) {
+        var can = q.eligible ? (q.expired ? App.pill("Quote expired", "warn") : App.pill("Yes", "ok")) :
+          App.pill(!q.techOk ? "Fails spec" : q.supplierStatus === "Not qualified" ? "Not qualified" : "Documents", "bad");
+        var tech = q.tech === "Acceptable" ? App.pill("Acceptable", "ok") : q.tech === "Not acceptable" ? App.pill("Not acceptable", "bad") : App.pill(q.tech, "mut");
         return [String(i + 1), esc(App.supplier(q.supplierId).name) + (x.award && x.award.supplierId === q.supplierId ? " " + App.pill("Awarded", "ok") : ""), App.status(q.supplierStatus),
-          money(q.landed), String(q.leadDays), esc(q.validUntil || ""), q.total.toFixed(1), can];
-      }), "No quotes yet."), "Landed cost, lead time and supplier rating, weighted " + x.weights.price + "/" + x.weights.lead + "/" + x.weights.quality) +
-      section("Decision", '<div class="pad">' + dl([["Award", aw ? esc(aw) + " on " + day(x.award.at) : "Not awarded"], ["Justification", x.award ? esc(x.award.justification || "Top scored eligible quote") : ""],
+          tech + (q.techNote ? '<div class="muted">' + esc(q.techNote) + "</div>" : ""), money(q.landed), String(q.leadDays), esc(q.validUntil || ""), q.total.toFixed(1), can];
+      }), "No quotes yet."), "Landed cost, lead time and supplier rating, weighted " + x.weights.price + "/" + x.weights.lead + "/" + x.weights.quality, true) +
+      section("Decision", '<div class="pad">' + dl([
+        ["Technical reviewer", x.techRole ? esc(P.roleLabel(x.techRole)) + (x.techDone ? ", sent to the Buyer " + day(x.techDone.at) : ", not done yet") : "Not reviewed (older record)"],
+        ["Recommended", x.recommendation ? esc(App.supplier(x.recommendation.supplierId).name) + " for " + money(x.recommendation.value) : ""],
+        ["Award", aw ? esc(aw) + " on " + day(x.award.at) : "Not awarded"], ["Justification", x.award ? esc(x.award.justification || "Top scored eligible quote") : ""],
+        ["Approvals", approvalText(x.award ? x.award.approvals : x.awardApprovals)],
+        ["Earlier rejections", (x.pastRecommendations || []).map(function (p) {
+          var no = p.approvals.find(function (a) { return a.status === "Rejected"; });
+          return esc(App.supplier(p.rec.supplierId).name + ", rejected by the " + P.roleLabel(no.role) + ": " + no.comment);
+        }).join("<br>")],
         ["Sole source reason", esc(x.soleReason)], ["Close date", esc(x.closeDate || "")],
         ["Invited, no quote", noQuote.length ? esc(noQuote.map(function (s) { return App.supplier(s).name; }).join(", ")) : "None"]]) + "</div>") +
       section("History", '<div class="pad">' + history([x.id]) + "</div>", "From the audit trail") + "</div></div>";
