@@ -82,4 +82,30 @@ test("a link in the address opens the screen or record", () => {
   check(h2() === "INV-6001", "record from hash, any case");
 });
 
+test("record numbers in every table are links to the record page", () => {
+  [["requester", "requests", "REQ-1012"], ["buyer", "rfx", "RFX-3003"], ["buyer", "pos", "PO-4006"], ["buyer", "expedite", "PO-4006"],
+   ["warehouse", "grn", "PO-4006"], ["ap", "invoices", "INV-6001"], ["buyer", "audit", "PO-4007"]].forEach(([r, tb, id]) => {
+    role(r); tab(tb);
+    const a = $('#view td a.rec[data-id="' + id + '"]');
+    check(a, tb + " should link " + id);
+    check(a.getAttribute("href") === "#" + id, tb + " href");
+  });
+});
+
+test("clicking a link in a table opens the record, and clicking the row still opens the panel", () => {
+  role("buyer"); tab("pos");
+  click($('#view td a.rec[data-id="PO-4006"]'));
+  check(h2() === "PO-4006" && w.App.sel.rec === "PO-4006", "record page");
+  tab("pos");
+  const row = $$("#view tr.clickable").find(r => r.textContent.indexOf("PO-4005") === 0);
+  click(row.children[2]);
+  check(!w.App.sel.rec && w.App.sel.pos === "PO-4005", "panel for PO-4005");
+});
+
+test("a PR number in a table opens its request page", () => {
+  role("buyer"); tab("pos");
+  click($('#view td a.rec[data-id="PR-2006"]'));
+  check(h2() === "PR-2006 (REQ-1007)", h2());
+});
+
 t.done();

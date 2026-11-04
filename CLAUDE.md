@@ -67,7 +67,7 @@ Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
 
-Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Next: record numbers in every table as links to the record page. Then role focus: the sidebar splits into "Your work" and "View only" per role, each screen opens on that role's slice, view only screens say so, and the Director and VP get an oversight home. Then dashboard charts in plain SVG. Then:
+Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN or INV and a number). Next: role focus: the sidebar splits into "Your work" and "View only" per role, each screen opens on that role's slice, view only screens say so, and the Director and VP get an oversight home. Then dashboard charts in plain SVG. Then:
 
 1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.

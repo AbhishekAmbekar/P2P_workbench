@@ -180,8 +180,12 @@
     } catch (e) {
       html = '<div class="note bad">Could not draw this section: ' + App.esc(e.message) + "</div>";
     }
-    // Dates and record numbers in table cells stay on one line instead of breaking at the hyphen.
-    html = html.replace(/<td>(\d{4}-\d\d-\d\d|[A-Z]{2,4}-\d{4})<\/td>/g, '<td class="nw">$1</td>');
+    // A record number at the start of a table cell becomes a link to its full page, on every screen.
+    // Clicking the link opens the record page. Clicking elsewhere on the row still opens the quick panel.
+    html = html.replace(/<td>((?:REQ|PR|RFX|PO|GRN|INV)-\d{4})(?=[<\s])/g,
+      '<td class="nw"><a class="rec" href="#$1" data-act="rec" data-id="$1">$1</a>');
+    // Dates in table cells stay on one line instead of breaking at the hyphen.
+    html = html.replace(/<td>(\d{4}-\d\d-\d\d)<\/td>/g, '<td class="nw">$1</td>');
     document.getElementById("view").innerHTML = html;
     syncHash();
   };
