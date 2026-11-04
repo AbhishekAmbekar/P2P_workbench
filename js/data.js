@@ -58,7 +58,7 @@
     // This is about focus, not permission: the engine rules decide who can act. Screens in neither list sit under "More screens".
     focus: {
       requester:   { work: ["requests"], view: ["pos", "grn", "audit"] },
-      manager:     { work: ["requests"], view: ["pos", "audit"] },
+      manager:     { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
       quality:     { work: ["requests", "grn", "suppliers"], view: ["rfx", "pos", "audit"] },
       engineering: { work: ["requests"], view: ["rfx", "pos", "audit"] },
       director:    { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },

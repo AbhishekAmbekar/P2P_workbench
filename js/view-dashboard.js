@@ -101,8 +101,8 @@
     var late = card("Late and at risk POs", '<div class="wrap" style="border:0">' + lateList(s) + "</div>");
     var flow = card("Pipeline", pipeline(s));
 
-    // The Director and VP oversee the whole cycle: approvals first, then money and risk.
-    if (App.role === "director" || App.role === "executive") {
+    // The Manager, Director and VP oversee the whole cycle: approvals first, then money and risk.
+    if (App.oversees()) {
       return "<h2>Oversight</h2>" + '<p class="hint">Approvals waiting on you, then budget, spend, delivery risk and invoice exceptions across the whole cycle.</p>' +
         '<div class="dash">' +
         '<div class="grid g2">' + desk + delivery + "</div>" +

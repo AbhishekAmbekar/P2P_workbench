@@ -53,6 +53,18 @@ test("the VP follows everything and works only on approvals", () => {
   check(band().indexOf("You are working as Executive, so this screen is for reading") >= 0);
 });
 
+test("the Manager follows every screen like the Director and VP, and gets Oversight", () => {
+  role("manager");
+  check(group("Your work").join() === "requests", "work " + group("Your work"));
+  check(group("View only").length === 7, "view " + group("View only"));
+  role("director"); const dir = group("View only").join();
+  role("manager");
+  check(group("View only").join() === dir, "same as the Director");
+  check(!$("#tabs .navmore"), "nothing folded");
+  tab("dashboard");
+  check($("#view h2").textContent === "Oversight", "oversight home");
+});
+
 test("each role opens Requests on its own slice", () => {
   role("requester"); tab("requests");
   check(rows().sort().join() === "REQ-1001,REQ-1008,REQ-1010,REQ-1014", "mine " + rows());

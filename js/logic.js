@@ -805,7 +805,9 @@
     var openPOs = s.pos.filter(function (po) { return ["Issued", "Confirmed", "Partially received"].indexOf(poStatus(s, po)) >= 0; });
     var invFor = function (who) { return s.invoices.filter(function (i) { return invOwners(i).indexOf(who) >= 0; }).length; };
     if (role === "requester") {
-      add("Requests that were rejected", s.requests.filter(function (r) { return r.status === "Rejected"; }).length, "requests");
+      // Only the requester's own requests. The name is the persona on the Requester role, the same name the request form saves.
+      var me = (REF.roles.find(function (x) { return x.id === "requester"; }) || { persona: "" }).persona.split(",")[0];
+      add("Your requests that were rejected", s.requests.filter(function (r) { return r.status === "Rejected" && r.requester === me; }).length, "requests");
     } else if (role === "quality") {
       add("Receipts on quality hold", s.grns.filter(function (g) { return g.result === "Hold"; }).length, "grn");
       var da = docAlerts(s, today);
