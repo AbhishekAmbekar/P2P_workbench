@@ -63,9 +63,12 @@
       // Saved before service POs existed: add the empty list, so old data keeps working without a reset.
       if (!App.state.ses) App.state.ses = [];
       if (!App.state.seq.SES) App.state.seq.SES = 7000;
-      // Suppliers added since the data was saved start with valid documents, as they do in a new workspace.
+      // Suppliers added since the data was saved get documents valid for one year from today.
+      // This also replaces the 9999-12-31 placeholder an earlier version saved for them.
+      var yearOut = P.addDays(App.today(), 365);
       REF.suppliers.forEach(function (sp) {
-        if (!App.state.docs[sp.id]) App.state.docs[sp.id] = { quality: "9999-12-31", origin: "9999-12-31", subtier: "9999-12-31" };
+        var d = App.state.docs[sp.id] || (App.state.docs[sp.id] = {});
+        ["quality", "origin", "subtier"].forEach(function (k) { if (!d[k] || d[k] === "9999-12-31") d[k] = yearOut; });
       });
       if (d.role && App.roleInfo(d.role)) App.role = d.role;
       if (d.tab && App.tabs.some(function (t) { return t.id === d.tab; })) App.tab = d.tab;
