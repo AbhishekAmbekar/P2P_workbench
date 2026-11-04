@@ -281,3 +281,4 @@ body.sp-on{overflow:hidden}
 .nowrap { white-space: nowrap; }
 .svcnote { min-width: 220px; }
 .svcdecide input { min-width: 160px; }
+.barnote{font-size:12px;color:var(--mut);margin:6px 0 0}

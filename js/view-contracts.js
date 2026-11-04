@@ -14,8 +14,12 @@
       '<i class="seg-wait" style="width:' + w(open) + '" data-tip="Released, not yet received ' + App.money(open) + '" tabindex="0"></i></div>' +
       '<div class="legend"><span class="l-acc">Received ' + App.money(st.received) + "</span>" +
       (open ? '<span class="l-wait">Released, not yet received ' + App.money(open) + "</span>" : "") +
-      "<span>Invoiced " + App.money(st.invoiced) + "</span><span>Remaining " + App.money(Math.max(0, st.remaining)) + " of " + App.money(c.cap) + "</span>" +
-      '<b class="' + (st.warn ? "pct-warn" : "") + '">' + st.pct + "% used</b></div>" + App.contractNotes(c, st) + "</div>";
+      "<span>Remaining " + App.money(Math.max(0, st.remaining)) + " of " + App.money(c.cap) + "</span>" +
+      '<b class="' + (st.warn ? "pct-warn" : "") + '">' + st.pct + "% used</b></div>" +
+      // Invoiced is part of what was received, not its own part of the bar, so it is a line below the legend.
+      '<p class="barnote">Invoiced ' + App.money(st.invoiced) + " of the " + App.money(st.received) + " received" +
+      (st.received > st.invoiced + 0.005 ? ", so " + App.money(st.received - st.invoiced) + " can still be billed." : ".") + "</p>" +
+      App.contractNotes(c, st) + "</div>";
   };
 
   App.contractNotes = function (c, st) {

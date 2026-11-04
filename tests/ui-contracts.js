@@ -23,6 +23,8 @@ test("a contract that ends soon and is mostly used warns the Buyer", () => {
   pick("CT-8002");
   check(text().indexOf("Start the renewal now") >= 0 && text().indexOf("Over 80% of the cap is released") >= 0, "warnings");
   check(text().indexOf("PO-4008") >= 0, "release listed");
+  check(![...$$("#view .legend span")].some(x => x.textContent.indexOf("Invoiced") === 0), "Invoiced is not a legend item, since it is not a part of the bar");
+  check($("#view .barnote").textContent === "Invoiced $13,728.00 of the $13,728.00 received.", "note: " + $("#view .barnote").textContent);
 });
 
 test("drafting a contract checks the terms and sends it to the Director", () => {
