@@ -81,36 +81,43 @@
       var st = a.status === "Pending" ? (step && step.role === a.role ? "Waiting" : "Not yet") : a.status;
       return "<tr><td>" + esc(P.roleLabel(a.role)) + "</td><td>" + App.status(st) + "</td><td>" + (a.at ? a.at.slice(0, 10) : "") + "</td><td>" + esc(a.note) + "</td></tr>";
     }).join("");
-    var h = '<h3 style="margin-top:14px">Approval</h3><div class="wrap"><table><tr><th>Approver</th><th>Status</th><th>Date</th><th>Note</th></tr>' + rows + "</table></div>";
+    var h = '<div class="wrap flat"><table><tr><th>Approver</th><th>Status</th><th>Date</th><th>Note</th></tr>' + rows + "</table></div>";
     if (step && step.role === App.role) {
-      h += '<div class="svcdecide" style="margin-top:8px"><input id="ctNote-' + c.id + '" placeholder="Note (needed to reject)">' +
+      h += '<div class="svcdecide pad"><input id="ctNote-' + c.id + '" placeholder="Note (needed to reject)">' +
         '<button class="small" data-act="ctDecide" data-decision="Approved" data-id="' + c.id + '">Approve</button>' +
         '<button class="small ghost" data-act="ctDecide" data-decision="Rejected" data-id="' + c.id + '">Reject</button></div>';
-    } else if (step) h += '<p class="hint">Waiting for the ' + esc(P.roleLabel(step.role)) + ".</p>";
+    } else if (step) h += '<p class="hint pad">Waiting for the ' + esc(P.roleLabel(step.role)) + ".</p>";
+    else if (c.status === "Rejected") h += '<p class="hint pad">Rejected. Draft a new contract with the changes the approver asked for.</p>';
     return h;
   }
 
+  // The same five blocks, in the same order and at the same size, for every contract, whatever its status.
   function detail(c) {
-    var s = App.state, sp = App.supplier(c.supplierId), st = P.contractStatus(s, c, App.today());
-    var h = '<div class="card"><h3>' + c.id + " " + App.status(st.status) + (st.endsSoon ? " " + App.pill("Ends in " + st.daysLeft + " d", "warn") : "") + App.recBtn(c.id) + "</h3>" +
-      '<p class="hint">' + esc(sp.name) + " · " + esc(c.title) + " · " + c.start + " to " + c.end + " · cap " + App.money(c.cap) + (c.basis ? " · basis: " + esc(c.basis) : "") + "</p>";
-    if (c.status === "Approved") h += App.contractBar(c);
-    h += '<h3 style="margin-top:14px">Items and agreed rates</h3><div class="wrap"><table><tr><th>Item</th><th>Unit</th><th class="num">Agreed rate</th><th class="num">Standard price</th><th class="num">Saving</th></tr>' +
+    var s = App.state, sp = App.supplier(c.supplierId), st = P.contractStatus(s, c, App.today()), approved = c.status === "Approved";
+    var dl = function (rows) { return '<dl class="kv pad">' + rows.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + r[1] + "</dd>"; }).join("") + "</dl>"; };
+    var head = '<div class="card"><h3>' + c.id + " " + App.status(st.status) + (st.endsSoon ? " " + App.pill("Ends in " + st.daysLeft + " d", "warn") : "") + App.recBtn(c.id) + "</h3>" +
+      '<p class="hint" style="margin:0">' + esc(sp.name) + " · " + esc(c.title) + "</p></div>";
+    var terms = dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status)], ["Period", c.start + " to " + c.end], ["Value cap", App.money(c.cap)],
+      ["Basis", esc(c.basis) || '<span class="muted">None given</span>'], ["Drafted", c.createdAt.slice(0, 10) + " by the " + esc(P.roleLabel(c.by))]]);
+    var items = '<div class="wrap flat"><table><tr><th>Item</th><th>Unit</th><th class="num">Agreed rate</th><th class="num">Standard</th><th class="num">Saving</th></tr>' +
       c.lines.map(function (l) {
         var it = App.item(l.itemId), save = Math.round(100 * (it.stdPrice - l.price) / it.stdPrice);
         return "<tr><td>" + esc(it.id + " " + it.name) + "</td><td>" + esc(it.uom) + '</td><td class="num">' + App.money(l.price) + '</td><td class="num">' + App.money(it.stdPrice) +
           '</td><td class="num">' + (save > 0 ? save + "%" : save < 0 ? Math.abs(save) + "% above" : "") + "</td></tr>";
       }).join("") + "</table></div>";
-    if (c.status === "Approved") {
-      h += '<h3 style="margin-top:14px">Releases (' + st.pos.length + ")</h3>" + (st.pos.length ? '<div class="wrap"><table><tr><th>PO</th><th>Item</th><th class="num">Quantity</th><th class="num">Value</th><th>Issued</th><th>Status</th></tr>' +
-        st.pos.map(function (po) {
-          return "<tr><td>" + po.id + "</td><td>" + esc(po.itemId) + '</td><td class="num">' + po.qty + '</td><td class="num">' + App.money(po.qty * po.unitPrice) +
-            "</td><td>" + po.createdAt.slice(0, 10) + "</td><td>" + App.status(P.poStatus(s, po)) + "</td></tr>";
-        }).join("") + "</table></div>" : '<p class="empty">No releases yet. Approved requests for these items are released from this contract on Purchase orders.</p>');
-    }
-    h += approvalsBlock(c);
-    if (c.status === "Rejected") h += '<div class="note warn">Rejected. Draft a new contract with the changes the approver asked for.</div>';
-    return h + "</div>";
+    var use = approved ? '<div class="pad">' + App.contractBar(c) + "</div>"
+      : '<p class="empty pad">' + (c.status === "Rejected" ? "This contract was rejected, so nothing can be released from it." : "No releases until the contract is approved.") + "</p>";
+    var rel = st.pos.length ? '<div class="wrap flat"><table><tr><th>PO</th><th>Item</th><th class="num">Quantity</th><th class="num">Value</th><th>Issued</th><th>Status</th></tr>' +
+      st.pos.map(function (po) {
+        return "<tr><td>" + po.id + "</td><td>" + esc(po.itemId) + '</td><td class="num">' + po.qty + '</td><td class="num">' + App.money(po.qty * po.unitPrice) +
+          "</td><td>" + po.createdAt.slice(0, 10) + "</td><td>" + App.status(P.poStatus(s, po)) + "</td></tr>";
+      }).join("") + "</table></div>"
+      : '<p class="empty pad">' + (approved ? "No releases yet. Approved requests for these items are released from this contract on Purchase orders." : "No releases until the contract is approved.") + "</p>";
+    return head + '<div class="secs" style="margin-top:12px">' +
+      App.card("Terms", terms) + App.card("Items and agreed rates", items, c.lines.length + " item" + (c.lines.length === 1 ? "" : "s")) +
+      App.card("Consumption", use, "Cap " + App.money(c.cap), true) +
+      App.card("Releases (" + st.pos.length + ")", rel, "Each PO from this contract") + App.card("Approval", approvalsBlock(c), "Director, plus the Executive from " + money0(REF.thresholds.executive)) +
+      "</div>";
   }
 
   App.views.contracts = function () {
