@@ -176,6 +176,7 @@ test("only the reviewer evaluates, a failed offer needs a reason, and every quot
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, leadDays: 40 });
   throwsWith(() => P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Acceptable", ""), "not waiting for a technical evaluation");
   P.closeBidding(s, "buyer", NOW, x.id);
+  assert.ok(P.scoreRFx(x, s, NOW).every(q => q.eligible === false && q.tech === "Pending"), "nothing can win while the review is open");
   throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "northfield", ""), "with the Engineering");
   throwsWith(() => P.techEvaluate(s, "buyer", NOW, x.id, "helio", "Acceptable", ""), "cannot do this");
   throwsWith(() => P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Not acceptable", ""), "does not meet the spec");

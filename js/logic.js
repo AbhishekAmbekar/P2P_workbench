@@ -347,7 +347,7 @@
     return x;
   }
   // Older saved RFx never had a technical review. Their quotes count as acceptable.
-  var techOk = function (x, q) { return !x.techRole || (q.tech && q.tech.result === "Acceptable"); };
+  var techOk = function (x, q) { return !x.techRole || !!(q.tech && q.tech.result === "Acceptable"); };
 
   // Price is scored on landed cost (price plus tariff plus freight), so a tariff can change the winner.
   // Pass the state and the current time to also check supplier documents and quote expiry.
