@@ -59,6 +59,8 @@ test("the Director and VP get the oversight home", () => {
   check(ex.textContent.indexOf("Warehouse") >= 0 && ex.textContent.indexOf("Buyer") >= 0, "fix owners");
   role("director"); tab("dashboard");
   check(h2() === "Oversight");
+  role("manager"); tab("dashboard");
+  check(h2() === "Oversight", "manager too");
   role("ap"); tab("dashboard");
   check(h2() === "Dashboard" && !card("Invoice exceptions by value"), "others keep the dashboard");
 });

@@ -160,6 +160,8 @@
     var f = App.focus(role);
     return ["dashboard", "guide", "audit"].indexOf(tab) < 0 && f.work.indexOf(tab) < 0;
   };
+  // The Manager, Director and VP follow the whole cycle and get the Oversight home.
+  App.oversees = function (role) { return ["manager", "director", "executive"].indexOf(role || App.role) >= 0; };
   App.actions.navMore = function () { App.sel.navMore = !App.sel.navMore; App.render(); };
   function navHtml(badges) {
     var f = App.focus(), tab = function (id) { return App.tabs.find(function (t) { return t.id === id; }); };
@@ -173,7 +175,7 @@
     });
     var open = App.sel.navMore || more.some(function (t) { return t.id === App.tab; });
     var home = tab("dashboard");
-    if (App.role === "director" || App.role === "executive") home = { id: "dashboard", label: "Oversight" };
+    if (App.oversees()) home = { id: "dashboard", label: "Oversight" };
     return btn(home) +
       grp("Your work") + f.work.map(function (id) { return btn(tab(id)); }).join("") +
       grp("View only") + f.view.map(function (id) { return btn(tab(id), "ro"); }).join("") +

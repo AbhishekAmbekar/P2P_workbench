@@ -623,5 +623,15 @@ test("document flow shows what does not exist yet, and unknown ids return nothin
   assert.strictEqual(P.docFlow(s, "hello"), null);
 });
 
+test("the requester's queue counts only their own rejected requests", () => {
+  const s = seed(NOW), rej = () => (P.queueFor(s, "requester", NOW).find(q => q.label.indexOf("rejected") >= 0) || { count: 0 }).count;
+  assert.ok(s.requests.some(r => r.status === "Rejected" && r.requester !== "Maya Chen"), "seed has someone else's rejected request");
+  assert.strictEqual(rej(), 0, "someone else's rejection should not count");
+  const r = P.createRequest(s, "requester", NOW, { requester: "Maya Chen", itemId: "MR-405", qty: 2, estUnit: 84, needBy: day(10),
+    site: "Plant A", costCenter: "CC-300 Maintenance", reason: "Spare kits" });
+  P.decide(s, "manager", NOW, r.id, "Rejected", "Use stock on hand first");
+  assert.strictEqual(rej(), 1, "her own rejection counts");
+});
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
