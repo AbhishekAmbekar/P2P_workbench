@@ -42,4 +42,14 @@ test("clicking anywhere else closes it", () => {
   check(!box().classList.contains("open"));
 });
 
+test("every css and js link in index.html carries the same version number", () => {
+  const html = require("fs").readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
+  const links = [...html.matchAll(/(?:src|href)="((?:js|css)\/[^"]+)"/g)].map(m => m[1]);
+  check(links.length >= 20, "links found " + links.length);
+  const versions = new Set(links.map(l => (l.match(/\?v=(\d+)$/) || [])[1]));
+  check(!versions.has(undefined), "a link has no ?v=: " + links.filter(l => !/\?v=\d+$/.test(l)).join(", "));
+  check(versions.size === 1, "versions differ: " + [...versions].join(", "));
+  check(w.document.querySelectorAll("script[src]").length === [...html.matchAll(/<script src=/g)].length, "every script loaded in the test");
+});
+
 t.done();
