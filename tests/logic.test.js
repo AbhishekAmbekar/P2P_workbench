@@ -176,6 +176,7 @@ test("only the reviewer evaluates, a failed offer needs a reason, and every quot
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, leadDays: 40 });
   throwsWith(() => P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Acceptable", ""), "not waiting for a technical evaluation");
   P.closeBidding(s, "buyer", NOW, x.id);
+  assert.ok(P.scoreRFx(x, s, NOW).every(q => q.eligible === false && q.tech === "Pending"), "nothing can win while the review is open");
   throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "northfield", ""), "with the Engineering");
   throwsWith(() => P.techEvaluate(s, "buyer", NOW, x.id, "helio", "Acceptable", ""), "cannot do this");
   throwsWith(() => P.techEvaluate(s, "engineering", NOW, x.id, "helio", "Not acceptable", ""), "does not meet the spec");
@@ -266,6 +267,104 @@ test("an RFx saved before technical reviews existed can still be awarded", () =>
   assert.ok(P.scoreRFx(x, s, NOW).every(q => q.eligible));
   award(s, NOW, x, "northfield", "");
   assert.strictEqual(x.status, "Awarded");
+});
+
+// ---------- service POs ----------
+// An approved crane hire request turned into a direct PO: 6 days at $1,450.
+function servicePO() {
+  const s = P.newState();
+  const r = baseReq(s, { itemId: "SV-502", qty: 6, estUnit: 1450, costCenter: "CC-300 Maintenance" });
+  approveAll(s, r);
+  const po = P.createPO(s, "buyer", NOW, r.id, { supplierId: "crestline", unitPrice: 1450, leadDays: 3 });
+  return { s, r, po };
+}
+
+test("the Buyer records service work and the Requester accepts it", () => {
+  const { s, po } = servicePO();
+  const f = { qty: 2, period: "2026-10", note: "Set the vessel on its plinth, 2 days with operator" };
+  throwsWith(() => P.postService(s, "requester", NOW, po.id, f), "cannot do this");
+  throwsWith(() => P.postService(s, "buyer", NOW, po.id, Object.assign({}, f, { period: "" })), "month");
+  throwsWith(() => P.postService(s, "buyer", NOW, po.id, Object.assign({}, f, { note: "" })), "Describe the work");
+  throwsWith(() => P.postService(s, "buyer", NOW, po.id, Object.assign({}, f, { qty: 1.234 })), "two decimals");
+  const e = P.postService(s, "buyer", NOW, po.id, f);
+  assert.strictEqual(e.status, "Submitted");
+  assert.strictEqual(e.value, 2900);
+  assert.strictEqual(P.poStatus(s, po), "In progress");
+  throwsWith(() => P.decideService(s, "buyer", NOW, e.id, "Accepted", ""), "cannot do this");
+  throwsWith(() => P.decideService(s, "requester", NOW, e.id, "Rejected", ""), "what is wrong");
+  P.decideService(s, "requester", NOW, e.id, "Accepted", "");
+  throwsWith(() => P.decideService(s, "requester", NOW, e.id, "Accepted", ""), "already accepted");
+  assert.strictEqual(P.grnTotals(s, po.id).accepted, 2);
+});
+
+test("service entries cannot take a PO past its ordered quantity, and goods receipts are refused", () => {
+  const { s, po } = servicePO();
+  P.postService(s, "buyer", NOW, po.id, { qty: 4, period: "2026-10", note: "Four days of lifts" });
+  throwsWith(() => P.postService(s, "buyer", NOW, po.id, { qty: 3, period: "2026-11", note: "Three more days" }), "Only 2 days ($2,900.00) remain");
+  throwsWith(() => P.postGRN(s, "warehouse", NOW, po.id, { qty: 1, result: "Accepted" }), "is a service PO");
+  const e = P.postService(s, "buyer", NOW, po.id, { qty: 2, period: "2026-11", note: "Two more days" });
+  P.decideService(s, "requester", NOW, e.id, "Rejected", "Only one day was worked, see the gate log");
+  assert.strictEqual(P.serviceStatus(s, po).leftQty, 2, "a rejected entry gives its quantity back");
+});
+
+test("service consumption shows ordered, accepted, waiting and remaining, and warns from 80%", () => {
+  const { s, po } = servicePO();
+  const a = P.postService(s, "buyer", NOW, po.id, { qty: 3, period: "2026-09", note: "Three days" });
+  P.decideService(s, "requester", NOW, a.id, "Accepted", "");
+  P.postService(s, "buyer", NOW, po.id, { qty: 1.5, period: "2026-10", note: "One and a half days" });
+  const st = P.serviceStatus(s, po);
+  assert.deepStrictEqual([st.ordered, st.accepted, st.waiting, st.remaining, st.pct, st.warn], [8700, 4350, 2175, 2175, 75, false]);
+  P.postService(s, "buyer", NOW, po.id, { qty: 0.5, period: "2026-10", note: "Half a day more" });
+  assert.strictEqual(P.serviceStatus(s, po).warn, true);
+});
+
+test("a service invoice matches only accepted, not yet invoiced service, and names who must act", () => {
+  const { s, po } = servicePO();
+  const inv = n => P.enterInvoice(s, "ap", NOW, { poId: po.id, invNo: "CL-" + n, qty: 2, unitPrice: 1450, date: day(0) });
+  let i = inv(1);
+  assert.strictEqual(i.match.issues[0].code, "NO_RECEIPT");
+  assert.strictEqual(i.match.issues[0].owner, "buyer", "nothing recorded: the Buyer records it");
+  const e = P.postService(s, "buyer", NOW, po.id, { qty: 2, period: "2026-10", note: "Two days of lifts" });
+  i = inv(2);
+  assert.strictEqual(i.match.issues[0].owner, "requester", "recorded but not accepted: the Requester accepts it");
+  assert.ok(P.queueFor(s, "requester", NOW).some(q => q.label === "Invoices waiting on your service acceptance"));
+  P.decideService(s, "requester", NOW, e.id, "Accepted", "");
+  P.rerunMatch(s, "ap", NOW, i.id);
+  assert.strictEqual(i.status, "Matched");
+  const half = P.postService(s, "buyer", NOW, po.id, { qty: 0.5, period: "2026-11", note: "Half day standby" });
+  P.decideService(s, "requester", NOW, half.id, "Accepted", "");
+  const h = P.enterInvoice(s, "ap", NOW, { poId: po.id, invNo: "CL-9", qty: 0.5, unitPrice: 1450, date: day(0) });
+  assert.strictEqual(h.status, "Matched", "service invoices can bill part of a day");
+  throwsWith(() => P.enterInvoice(s, "ap", NOW, { poId: "PO-9999", invNo: "X", qty: 1, unitPrice: 1, date: day(0) }), "not found");
+});
+
+test("service POs stay out of delivery health and the expedite list", () => {
+  const { s, po } = servicePO();
+  assert.strictEqual(P.ctb(s, po).status, "Service");
+  assert.strictEqual(P.expediteList(s, at(30)).length, 0);
+  const m = P.metrics(s, NOW);
+  assert.strictEqual(m.ctb.Clear + m.ctb["At Risk"] + m.ctb.Late, 0);
+  assert.strictEqual(m.spend.Services, 8700);
+});
+
+test("a fully accepted service PO is consumed, and the flow finds it from a service entry", () => {
+  const { s, r, po } = servicePO();
+  const e = P.postService(s, "buyer", NOW, po.id, { qty: 6, period: "2026-10", note: "All six days" });
+  P.decideService(s, "requester", NOW, e.id, "Accepted", "");
+  assert.strictEqual(P.poStatus(s, po), "Consumed");
+  const f = P.docFlow(s, e.id);
+  assert.strictEqual(f.po.id, po.id);
+  assert.strictEqual(f.request.id, r.id);
+  assert.deepStrictEqual(f.ses.map(x => x.id), [e.id]);
+  assert.strictEqual(f.service, true);
+});
+
+test("service suppliers need only a quality certificate, and services go to the right technical reviewer", () => {
+  const s = P.newState();
+  assert.deepStrictEqual(P.supplierDocs(s, "keystone", NOW.slice(0, 10)).map(d => d.doc), ["quality"]);
+  assert.deepStrictEqual(P.supplierDocs(s, "northfield", NOW.slice(0, 10)).map(d => d.doc), ["quality", "origin", "subtier"]);
+  assert.strictEqual(P.techReviewer(P.REF.items.find(i => i.id === "SV-503")), "requester");
+  assert.strictEqual(P.techReviewer(P.REF.items.find(i => i.id === "SV-505")), "quality");
 });
 
 // ---------- 3. PO policy ----------
@@ -434,15 +533,16 @@ test("rejecting an invoice needs a reason and frees the invoice number", () => {
 test("seed builds without breaking any rule and covers every stage", () => {
   const s = seed(NOW);
   const m = P.metrics(s, NOW);
-  assert.strictEqual(s.requests.length, 14);
+  assert.strictEqual(s.requests.length, 16);
   assert.ok(m.pending >= 2, "pending approvals");
   assert.ok(m.awaitingSourcing >= 1, "awaiting sourcing");
   assert.ok(s.rfx.some(x => x.status === "Open"));
   assert.ok(s.rfx.some(x => x.status === "Evaluating"));
   assert.ok(s.rfx.some(x => x.status === "Awarded"));
   assert.ok(s.grns.some(g => g.result === "Hold"));
-  assert.strictEqual(m.exceptions, 2);
-  assert.strictEqual(m.paid, 1);
+  assert.strictEqual(m.exceptions, 3);
+  assert.ok(s.ses.some(e => e.status === "Submitted") && s.ses.some(e => e.status === "Accepted"), "service entries waiting and accepted");
+  assert.strictEqual(m.paid, 2);   // the solvent invoice and the first month of technician hours
   assert.ok(m.ctb.Late >= 1 && m.ctb["At Risk"] >= 1 && m.ctb.Clear >= 0);
   assert.ok(m.cycleDays > 0);
   assert.ok(s.requests.some(r => r.status === "Rejected"));
@@ -451,7 +551,7 @@ test("seed builds without breaking any rule and covers every stage", () => {
 test("seed exceptions have the expected owners", () => {
   const s = seed(NOW);
   const owners = s.invoices.filter(i => i.status === "Exception").map(i => P.invOwners(i)[0]).sort();
-  assert.deepStrictEqual(owners, ["buyer", "warehouse"]);
+  assert.deepStrictEqual(owners, ["buyer", "requester", "warehouse"]);
 });
 
 test("queues point each role at its own work", () => {
@@ -493,7 +593,7 @@ test("budget status separates paid, ordered, requested and remaining", () => {
   assert.strictEqual(c1.remaining, 29880);
   assert.strictEqual(c1.pct, 80);
   assert.strictEqual(by["CC-200 Engineering"].requested, 61540);   // includes the awarded RFx at its quoted value
-  assert.strictEqual(by["CC-300 Maintenance"].pct, 81);
+  assert.strictEqual(by["CC-300 Maintenance"].pct, 75);   // includes the two service POs
   assert.strictEqual(by["CC-400 Quality"].orderedOpen, 7700);
   P.budgetStatus(s).forEach(b => assert.strictEqual(b.used + b.remaining, b.budget));
 });
@@ -624,9 +724,9 @@ test("a PO inside the variance band is not blocked but still shows above referen
 });
 
 // ---------- metrics ----------
-test("committed spend and pipeline always list all four categories", () => {
+test("committed spend and pipeline always list every category", () => {
   const m = P.metrics(P.newState(), NOW);
-  assert.deepStrictEqual(Object.keys(m.spend), ["Raw materials", "Components", "Packaging", "MRO"]);
+  assert.deepStrictEqual(Object.keys(m.spend), ["Raw materials", "Components", "Packaging", "MRO", "Services"]);
   const m2 = P.metrics(seed(NOW), NOW);
   assert.strictEqual(m2.spend["Raw materials"], 100520);
   assert.strictEqual(m2.spend.Packaging, 7700);

@@ -157,6 +157,33 @@
     po = P.createPO(s, "buyer", T(-8), r.id, { supplierId: "atlas", unitPrice: 82.5, leadDays: 10 });
     P.confirmPO(s, "buyer", T(-7), po.id, D(2));
 
+    // O. Technician man hours on a rate contract. Three months of work recorded by the Buyer from the supplier's timesheets.
+    //    Two months accepted and invoiced. The third is still waiting for the Requester, so its invoice sits in exception.
+    var month = function (off) { return D(off).slice(0, 7); };
+    r = req(-100, "Maya Chen", "SV-501", 400, 68, 60, "Plant A", "CC-300 Maintenance", "Breakdown and shutdown support, about 130 hours a month for a quarter");
+    approveAll(r, -98);
+    po = P.createPO(s, "buyer", T(-96), r.id, { leadDays: 3 });
+    P.confirmPO(s, "buyer", T(-95), po.id, D(-92));
+    var e = P.postService(s, "buyer", T(-68), po.id, { qty: 96, period: month(-75), note: "Breakdown support on pumps and conveyors, 12 call outs, timesheets KFS-0811" });
+    P.decideService(s, "requester", T(-67), e.id, "Accepted", "Hours match the work orders");
+    inv = P.enterInvoice(s, "ap", T(-62), { poId: po.id, invNo: "KFS-2210", qty: 96, unitPrice: 66, date: D(-63) });
+    P.payInvoice(s, "ap", T(-35), inv.id);
+    e = P.postService(s, "buyer", T(-38), po.id, { qty: 112, period: month(-45), note: "Planned shutdown, two technicians for seven days, timesheets KFS-0907" });
+    P.decideService(s, "requester", T(-37), e.id, "Accepted", "Shutdown log signed off");
+    P.enterInvoice(s, "ap", T(-30), { poId: po.id, invNo: "KFS-2246", qty: 112, unitPrice: 66, date: D(-31) });
+    P.postService(s, "buyer", T(-6), po.id, { qty: 88, period: month(-15), note: "Gearbox overhaul support and lubrication rounds, timesheets KFS-1004" });
+    P.enterInvoice(s, "ap", T(-2), { poId: po.id, invNo: "KFS-2291", qty: 88, unitPrice: 66, date: D(-3) });
+
+    // P. Crane hire with operator, billed per day. Five of six days used, so the PO is near its limit. Not invoiced yet.
+    r = req(-35, "Tom Becker", "SV-502", 6, 1450, 20, "Plant B", "CC-300 Maintenance", "Lift the new heat exchanger and remove the old fan housing");
+    approveAll(r, -33);
+    po = P.createPO(s, "buyer", T(-31), r.id, { supplierId: "crestline", unitPrice: 1450, leadDays: 4 });
+    P.confirmPO(s, "buyer", T(-30), po.id, D(-27));
+    e = P.postService(s, "buyer", T(-20), po.id, { qty: 3, period: month(-21), note: "Set the heat exchanger on its plinth, 3 days with operator and rigger" });
+    P.decideService(s, "requester", T(-19), e.id, "Accepted", "Lift done, permit closed");
+    e = P.postService(s, "buyer", T(-8), po.id, { qty: 2, period: month(-9), note: "Removed the old fan housing, 2 days" });
+    P.decideService(s, "requester", T(-7), e.id, "Accepted", "Housing removed and scrapped");
+
     // Supplier documents. Set last, so the demo records above were built while every document was valid.
     P.REF.suppliers.forEach(function (sp, i) {
       ["quality", "origin", "subtier"].forEach(function (k, j) { s.docs[sp.id][k] = D(120 + ((i * 7 + j * 5) * 29) % 260); });

@@ -18,7 +18,7 @@ click($("#resetBtn"));
 test("Accounts Payable works on invoices and follows POs, receipts and suppliers", () => {
   role("ap");
   check(group("Your work").join() === "invoices", "work " + group("Your work"));
-  check(group("View only").join() === "pos,grn,suppliers,audit", "view " + group("View only"));
+  check(group("View only").join() === "pos,grn,services,suppliers,audit", "view " + group("View only"));
   check($('#tabs .navmore'), "more screens toggle");
   check($$("#tabs button.more.hid").length === 3, "three folded screens");
 });
@@ -47,7 +47,7 @@ test("a role's own screens show no view only line", () => {
 test("the VP follows everything and works only on approvals", () => {
   role("executive");
   check(group("Your work").join() === "requests,rfx", "work " + group("Your work"));
-  check(group("View only").length === 6, "view " + group("View only"));
+  check(group("View only").length === 7, "view " + group("View only"));
   check(!$("#tabs .navmore"), "nothing folded for the VP");
   tab("pos");
   check(band().indexOf("You are working as Executive, so this screen is for reading") >= 0);
@@ -56,7 +56,7 @@ test("the VP follows everything and works only on approvals", () => {
 test("the Manager follows every screen like the Director and VP, and gets Oversight", () => {
   role("manager");
   check(group("Your work").join() === "requests", "work " + group("Your work"));
-  check(group("View only").length === 7, "view " + group("View only"));
+  check(group("View only").length === 8, "view " + group("View only"));
   role("director"); const dir = group("Your work").concat(group("View only")).sort().join();
   role("manager");
   check(group("Your work").concat(group("View only")).sort().join() === dir, "same screens as the Director");
@@ -67,7 +67,7 @@ test("the Manager follows every screen like the Director and VP, and gets Oversi
 
 test("each role opens Requests on its own slice", () => {
   role("requester"); tab("requests");
-  check(rows().sort().join() === "REQ-1001,REQ-1008,REQ-1010,REQ-1014", "mine " + rows());
+  check(rows().sort().join() === "REQ-1001,REQ-1008,REQ-1010,REQ-1014,REQ-1015", "mine, including her technician hours request " + rows());
   role("manager"); tab("requests");
   check(rows().join() === "REQ-1012", "waiting on manager " + rows());
   role("director"); tab("requests");
@@ -79,9 +79,9 @@ test("each role opens Requests on its own slice", () => {
 test("a filter picked by hand stays until the role changes", () => {
   role("manager"); tab("requests");
   clickText("#view button.small", "All");
-  check(rows().length === 14);
+  check(rows().length === 16);
   tab("pos"); tab("requests");
-  check(rows().length === 14, "kept");
+  check(rows().length === 16, "kept");
   role("requester"); role("manager");
   check(rows().join() === "REQ-1012", "back to the role default");
 });
@@ -90,9 +90,9 @@ test("the Warehouse opens Purchase orders on what is still due in", () => {
   role("warehouse"); tab("pos");
   check(rows().sort().join() === "PO-4001,PO-4003,PO-4006,PO-4007", "open " + rows());
   clickText("#view button.small", "All");
-  check(rows().length === 7);
+  check(rows().length === 9);
   role("buyer"); tab("pos");
-  check(rows().length === 7, "buyer sees all");
+  check(rows().length === 9, "buyer sees all");
   clickText("#view button.small", "Late or at risk");
   check(rows().sort().join() === "PO-4001,PO-4006,PO-4007", "risk " + rows());
 });

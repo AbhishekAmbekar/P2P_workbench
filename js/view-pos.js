@@ -84,7 +84,7 @@
     var st = P.poStatus(s, po), c = P.ctb(s, po), t = P.grnTotals(s, po.id), buyer = App.role === "buyer";
     var invoiced = P.invoicedQty(s, po.id, null, ["Matched", "Paid"]);
     var rows = [
-      ["Supplier", sp.name], ["Item", it.id + "  " + it.name], ["Quantity", po.qty + " " + it.uom],
+      ["Supplier", sp.name], ["Item", it.id + "  " + it.name], ["Quantity", po.qty + " " + it.uom + (P.isService(po) && po.qty !== 1 ? "s" : "")],
       ["Unit price", App.money(po.unitPrice)], ["PO value", App.money(P.poTotal(po))],
       ["Landed cost", App.money(P.poLanded(po)) + (po.tariffPct || po.freight ? " (" + po.tariffPct + "% tariff, " + App.money(po.freight) + " freight per unit)" : " (no tariff or freight)")],
       ["Reference price", App.money(po.refPrice || P.refPrice(it)) + (it.contract ? " (contract)" : " (standard)")], ["Source", po.source],
@@ -92,10 +92,22 @@
       ["Site", po.site], ["From", r.id + " / " + r.prNo + (po.rfxId ? " / " + po.rfxId : "")],
       ["Received (accepted)", t.accepted + " of " + po.qty], ["On quality hold", t.hold], ["Rejected", t.rejected], ["Invoiced and matched", invoiced + " of " + po.qty]
     ];
+    var svc = P.isService(po);
+    if (svc) {
+      // A service PO is consumed, not received. Show accepted, waiting and remaining in its own unit and in money.
+      var ss = P.serviceStatus(s, po), u = it.uom + "s";
+      rows = rows.filter(function (x) { return ["Received (accepted)", "On quality hold", "Rejected", "Promised delivery", "Need by"].indexOf(x[0]) < 0; });
+      rows.push(["Ordered", po.qty + " " + u + ", " + App.money(ss.ordered)], ["Accepted", ss.acceptedQty + " " + u + ", " + App.money(ss.accepted)],
+        ["Waiting for acceptance", ss.waitingQty + " " + u + ", " + App.money(ss.waiting)], ["Remaining", ss.leftQty + " " + u + ", " + App.money(ss.remaining)],
+        ["Service period ends", po.needBy]);
+    }
     var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + " " + (c.status !== "Delivered" ? App.status(c.status) : "") + App.recBtn(po.id) + "</h3>" +
       '<div class="form" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' + rows.map(function (x) {
         return '<div><div class="hint">' + esc(x[0]) + "</div><div>" + esc(x[1]) + "</div></div>";
       }).join("") + "</div>";
+    if (svc) {
+      h += App.serviceBar(po) + '<div class="actions"><button class="ghost" data-act="goto" data-arg="services" data-id="' + po.id + '">Service entries for this PO</button></div>';
+    }
     if (po.refPrice && po.unitPrice > po.refPrice + 0.0001) {
       var over = Math.round(100 * (po.unitPrice - po.refPrice) / po.refPrice * 10) / 10;
       h += '<div class="note warn">Priced ' + over + "% above the " + (it.contract ? "contract" : "standard") + " price of " + App.money(po.refPrice) + "." +
@@ -107,12 +119,12 @@
         : "Under 5 days of slack. Confirm the ship date.") + "</div>";
     }
     if (buyer && !po.cancelled) {
-      if (!po.confirmed && st !== "Received" && st !== "Closed") {
+      if (!po.confirmed && ["Received", "Closed", "Consumed"].indexOf(st) < 0) {
         h += '<h3 style="margin-top:14px">Supplier confirmation</h3><form data-form="poConfirm" data-id="' + po.id + '" class="form">' +
           '<label>Confirmed delivery date<input type="date" name="date" value="' + po.promisedDate + '"></label>' +
           '<div class="actions" style="align-self:end"><button type="submit">Record confirmation</button></div></form>';
       }
-      if (["Received", "Closed"].indexOf(st) < 0) {
+      if (["Received", "Closed", "Consumed"].indexOf(st) < 0 && !svc) {
         h += '<h3 style="margin-top:14px">Move the promise date</h3><form data-form="poMove" data-id="' + po.id + '" class="form">' +
           '<label>New promised date<input type="date" name="date" value="' + po.promisedDate + '"></label>' +
           '<label class="wide">Why did it move?<input name="note" placeholder="Supplier note or call summary"></label>' +
@@ -135,9 +147,10 @@
 
   var PO_FILTERS = [
     { id: "all", label: "All", test: function () { return true; } },
-    { id: "open", label: "Open for receiving", test: function (s, po) { return ["Issued", "Confirmed", "Partially received", "Quality hold"].indexOf(P.poStatus(s, po)) >= 0; } },
+    { id: "open", label: "Open for receiving", test: function (s, po) { return !P.isService(po) && ["Issued", "Confirmed", "Partially received", "Quality hold"].indexOf(P.poStatus(s, po)) >= 0; } },
+    { id: "services", label: "Services", test: function (s, po) { return P.isService(po); } },
     { id: "risk", label: "Late or at risk", test: function (s, po) { var c = P.ctb(s, po).status; return c === "Late" || c === "At Risk"; } },
-    { id: "done", label: "Received or closed", test: function (s, po) { return ["Received", "Closed", "Cancelled"].indexOf(P.poStatus(s, po)) >= 0; } }
+    { id: "done", label: "Received or closed", test: function (s, po) { return ["Received", "Consumed", "Closed", "Cancelled"].indexOf(P.poStatus(s, po)) >= 0; } }
   ];
   // The Warehouse opens on what is still due in. Everyone else opens on all POs.
   var poDefault = function (role) { return role === "warehouse" ? "open" : "all"; };

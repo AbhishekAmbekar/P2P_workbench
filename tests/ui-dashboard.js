@@ -12,7 +12,7 @@ test("everyone gets the four charts with legends", () => {
   role("buyer"); tab("dashboard");
   ["Budget by cost center", "Spend by category", "Delivery health", "Invoices"].forEach(n => check(card(n), "missing " + n));
   check(card("Budget by cost center").querySelectorAll(".hb-row").length === 4, "one row per cost center");
-  check(card("Spend by category").querySelectorAll(".cc-group").length === 4, "one group per category");
+  check(card("Spend by category").querySelectorAll(".cc-group").length === 5, "one group per category, Services included");
   check(card("Budget by cost center").textContent.indexOf("Committed (issued POs)") >= 0, "legend");
 });
 
@@ -55,7 +55,7 @@ test("the Director and VP get the oversight home", () => {
   const ex = card("Invoice exceptions by value");
   check(ex, "exceptions card");
   const ids = [...ex.querySelectorAll("a.rec")].map(a => a.dataset.id);
-  check(ids.join() === "INV-6003,INV-6002", "largest first " + ids);
+  check(ids.join() === "INV-6006,INV-6003,INV-6002", "largest first " + ids);
   check(ex.textContent.indexOf("Warehouse") >= 0 && ex.textContent.indexOf("Buyer") >= 0, "fix owners");
   role("director"); tab("dashboard");
   check(h2() === "Oversight");

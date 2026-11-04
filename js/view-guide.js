@@ -23,7 +23,8 @@
           "<b>RFx.</b> The Buyer invites suppliers and records quotes. When bidding closes, the user side checks each offer against the spec: Engineering for engineered components, Quality for items flagged for inspection, the Requester for everything else. The Buyer then ranks the acceptable offers on a weighted score of landed price, lead time and supplier quality, and recommends one. The Director approves the award, and the Executive too for large or risky awards.",
           "<b>PO.</b> The Buyer issues the purchase order from the award, from a contract, or as a direct buy. Then the Buyer confirms the supplier date and manages changes.",
           "<b>GRN.</b> The Warehouse posts what arrived: accepted, rejected or on quality hold. Quality decides what happens to held goods.",
-          "<b>Invoice.</b> Accounts Payable enters the supplier invoice. The system matches it exactly against the PO and the accepted receipts. Matches can be paid. Gaps go to the person who can fix them."
+          "<b>Service entry.</b> Services such as technician hours, crane hire or a monthly maintenance contract are ordered as a quantity of hours, days, weeks or months at a rate, and used up over time. Each month the Buyer records the work from the supplier's timesheet or day sheet. The Requester accepts it or sends it back with a reason. This is the service version of a goods receipt.",
+          "<b>Invoice.</b> Accounts Payable enters the supplier invoice. The system matches it exactly against the PO and the accepted receipts or accepted service. Matches can be paid. Gaps go to the person who can fix them."
         ])) +
       section("The rules built in",
         list([
@@ -36,13 +37,14 @@
             money(T.executive).replace(/\.00$/, "") + ", or for any of those risky picks. A rejected award goes back to the Buyer with the reason. No PO until the award is approved.",
           "<b>Direct buys.</b> Only qualified suppliers. A PO cannot run more than " + Math.round(T.poOverrun * 100) + "% over the approved PR value. Past that the request has to be revised and approved again.",
           "<b>Receiving.</b> You cannot receive more than is open on the PO. Rejected units are recorded but do not use up the open quantity. Held units count as received until Quality decides.",
+          "<b>Services.</b> A service entry cannot take a PO past its ordered quantity. When more is needed, the Requester raises a new request. Above " + (REF.serviceWarnPct || 80) + "% used, the PO warns that it is running out. Work waiting for acceptance uses up the PO but cannot be invoiced yet. Rejected work does not count.",
           "<b>Exact match.</b> Quantity must equal what is accepted and not yet invoiced. Price must equal the PO price to the cent. A repeated invoice number from the same supplier is flagged as a duplicate.",
           "<b>Budgets.</b> Each cost center has an annual budget. Used budget is issued POs at landed cost plus requests that are pending, approved or in sourcing. A request that would take a cost center past its budget needs the Executive too, whatever its value.",
           "<b>Landed cost.</b> Quotes carry a tariff percentage and freight per unit. Price is scored on landed cost, so a supplier with the lowest sticker price can lose once a tariff is added. Invoices still match on the supplier price, because duty is paid separately.",
           "<b>Quote validity.</b> Every quote has a valid until date. An expired quote cannot be awarded or ordered until the Buyer records that the supplier has revalidated it.",
           "<b>Supplier documents.</b> A current quality certificate and origin declaration are required for every supplier, plus a sub tier disclosure for raw materials and components. An expired or missing document blocks awards and POs until Quality records the renewal on the Suppliers tab. A document expiring within 30 days only warns.",
           "<b>Price against reference.</b> Each item has a contract or standard price. A PO more than 10% above it needs a written reason. Any PO above it is counted on the dashboard.",
-          "<b>Fix owners.</b> Price gaps go to the Buyer. Quantity over billing and missing receipts go to the Warehouse. Short billing and duplicates stay with Accounts Payable."
+          "<b>Fix owners.</b> Price gaps go to the Buyer. Quantity over billing and missing receipts go to the Warehouse, or for a service, to the Requester when work waits for acceptance and to the Buyer when nothing has been recorded. Short billing and duplicates stay with Accounts Payable."
         ])) +
       section("Delivery health",
         "<p>For every open PO, slack is the need by date minus the supplier promise date. Under 5 days is At Risk. Below zero is Late. Move a promise date on the PO screen to see the status change.</p>") +

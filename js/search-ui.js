@@ -50,7 +50,7 @@
     wrap.addEventListener("mousedown", function (e) { if (e.target === wrap) App.searchClose(); });
   }
 
-  var KIND_CLASS = { Request: "k-req", RFx: "k-rfx", PO: "k-po", Receipt: "k-grn", Invoice: "k-inv", Supplier: "k-sup", Screen: "k-scr" };
+  var KIND_CLASS = { Request: "k-req", RFx: "k-rfx", PO: "k-po", Receipt: "k-grn", Invoice: "k-inv", Service: "k-grn", Supplier: "k-sup", Screen: "k-scr" };
 
   function draw(heading, empty) {
     var list = document.getElementById("spres");

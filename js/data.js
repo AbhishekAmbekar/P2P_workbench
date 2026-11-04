@@ -15,10 +15,13 @@
     sites: ["Pilot Line", "Plant A", "Plant B", "Field Service"],
     costCenters: ["CC-100 Operations", "CC-200 Engineering", "CC-300 Maintenance", "CC-400 Quality"],
     // Annual budget per cost center. A request that would take a cost center past its budget needs Executive approval.
-    budgets: { "CC-100 Operations": 150000, "CC-200 Engineering": 90000, "CC-300 Maintenance": 40000, "CC-400 Quality": 25000 },
+    budgets: { "CC-100 Operations": 150000, "CC-200 Engineering": 90000, "CC-300 Maintenance": 90000, "CC-400 Quality": 25000 },
     // Spend categories. Direct spend goes into the product, indirect spend keeps the business running.
-    categories: ["Raw materials", "Components", "Packaging", "MRO"],
-    categoryType: { "Raw materials": "Direct", "Components": "Direct", "Packaging": "Direct", "MRO": "Indirect" },
+    // Services are bought as an estimated quantity of hours, days, weeks or months at a rate, and consumed over time.
+    categories: ["Raw materials", "Components", "Packaging", "MRO", "Services"],
+    categoryType: { "Raw materials": "Direct", "Components": "Direct", "Packaging": "Direct", "MRO": "Indirect", "Services": "Indirect" },
+    // Share of a service PO used up before the screens warn that it is running out.
+    serviceWarnPct: 80,
     // Supplier documents. Every supplier needs the first two. Suppliers of these categories also need the third.
     subtierCategories: ["Raw materials", "Components"],
     docTypes: { quality: "Quality certificate", origin: "Origin declaration", subtier: "Sub-tier disclosure" },
@@ -57,15 +60,15 @@
     // What each role works on, and what it follows along with. Used for the sidebar groups and the "View only" line.
     // This is about focus, not permission: the engine rules decide who can act. Screens in neither list sit under "More screens".
     focus: {
-      requester:   { work: ["requests", "rfx"], view: ["pos", "grn", "audit"] },
-      manager:     { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      requester:   { work: ["requests", "rfx", "services"], view: ["pos", "grn", "audit"] },
+      manager:     { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "services", "invoices", "suppliers", "audit"] },
       quality:     { work: ["requests", "rfx", "grn", "suppliers"], view: ["pos", "audit"] },
       engineering: { work: ["requests", "rfx"], view: ["pos", "audit"] },
-      director:    { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      executive:   { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      buyer:       { work: ["rfx", "pos", "expedite", "suppliers", "invoices"], view: ["requests", "grn", "audit"] },
+      director:    { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "services", "invoices", "suppliers", "audit"] },
+      executive:   { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "services", "invoices", "suppliers", "audit"] },
+      buyer:       { work: ["rfx", "pos", "expedite", "services", "suppliers", "invoices"], view: ["requests", "grn", "audit"] },
       warehouse:   { work: ["grn"], view: ["pos", "invoices", "audit"] },
-      ap:          { work: ["invoices"], view: ["pos", "grn", "suppliers", "audit"] }
+      ap:          { work: ["invoices"], view: ["pos", "grn", "services", "suppliers", "audit"] }
     },
     // Who works on each screen, shown to roles that only view it.
     screenOwners: {
@@ -74,6 +77,7 @@
       pos: "The Buyer creates POs and keeps supplier dates and prices current.",
       expedite: "The Buyer chases suppliers from here.",
       grn: "Receiving is done by the Warehouse. Quality decides what happens to held goods.",
+      services: "The Buyer records the service work from the supplier's report. The Requester accepts it, the same way a receipt confirms goods.",
       invoices: "Accounts Payable enters, matches and pays invoices here. Price gaps go to the Buyer, receipt gaps to the Warehouse.",
       suppliers: "Quality records document renewals. The Buyer keeps supplier emails."
     },
@@ -92,7 +96,12 @@
       { id: "meridian", name: "Meridian MRO", categories: ["MRO"], status: "Qualified", quality: 91, terms: 30 },
       { id: "pinecrest", name: "Pinecrest Cable", categories: ["Components", "Raw materials", "Packaging"], status: "Conditional", quality: 72, terms: 60 },
       { id: "summit", name: "Summit Packaging", categories: ["Packaging"], status: "Qualified", quality: 89, terms: 45 },
-      { id: "greenline", name: "Greenline Pack", categories: ["Packaging"], status: "Qualified", quality: 83, terms: 30 }
+      { id: "greenline", name: "Greenline Pack", categories: ["Packaging"], status: "Qualified", quality: 83, terms: 30 },
+      { id: "keystone", name: "Keystone Field Services", categories: ["Services"], status: "Qualified", quality: 88, terms: 30 },
+      { id: "crestline", name: "Crestline Lift and Rigging", categories: ["Services"], status: "Qualified", quality: 86, terms: 30 },
+      { id: "ridgeway", name: "Ridgeway Scaffold Hire", categories: ["Services"], status: "Qualified", quality: 82, terms: 45 },
+      { id: "truegauge", name: "Truegauge Calibration Lab", categories: ["Services"], status: "Qualified", quality: 93, terms: 30 },
+      { id: "northwind", name: "Northwind Compressor Care", categories: ["Services"], status: "Conditional", quality: 74, terms: 45 }
     ],
 
     // contract: pre negotiated supplier and price, allows a direct PO at any value
@@ -111,7 +120,15 @@
       { id: "MR-402", name: "Sealed bearing 6205", category: "MRO", uom: "ea", stdPrice: 9.40, needsQuality: false, needsEngineering: false, contract: { supplierId: "meridian", price: 9.10 } },
       { id: "MR-403", name: "Cut resistant gloves", category: "MRO", uom: "pair", stdPrice: 6.20, needsQuality: false, needsEngineering: false, contract: { supplierId: "meridian", price: 5.90 } },
       { id: "MR-404", name: "Grease cartridge, 400 g", category: "MRO", uom: "case", stdPrice: 96.00, needsQuality: false, needsEngineering: false, contract: { supplierId: "meridian", price: 92.00 } },
-      { id: "MR-405", name: "Fastener assortment M6 to M12", category: "MRO", uom: "kit", stdPrice: 84.00, needsQuality: false, needsEngineering: false, contract: null }
+      { id: "MR-405", name: "Fastener assortment M6 to M12", category: "MRO", uom: "kit", stdPrice: 84.00, needsQuality: false, needsEngineering: false, contract: null },
+      // Services. The quantity is an estimate of hours, days, weeks or months. The price is the rate.
+      { id: "SV-501", name: "Maintenance technician labor, per man hour", category: "Services", uom: "hour", stdPrice: 68.00, needsQuality: false, needsEngineering: false, service: true, contract: { supplierId: "keystone", price: 66.00 } },
+      { id: "SV-502", name: "Mobile crane hire with operator, per day", category: "Services", uom: "day", stdPrice: 1450.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
+      { id: "SV-503", name: "Scaffold rental, erected and dismantled, per week", category: "Services", uom: "week", stdPrice: 520.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
+      { id: "SV-504", name: "Air compressor maintenance contract, per month", category: "Services", uom: "month", stdPrice: 2100.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
+      { id: "SV-505", name: "Gauge and instrument calibration, per instrument", category: "Services", uom: "instrument", stdPrice: 45.00, needsQuality: true, needsEngineering: false, service: true, contract: null },
+      { id: "SV-506", name: "Industrial cleaning crew, per shift", category: "Services", uom: "shift", stdPrice: 780.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
+      { id: "SV-507", name: "Forklift rental with servicing, per month", category: "Services", uom: "month", stdPrice: 1150.00, needsQuality: false, needsEngineering: false, service: true, contract: null }
     ]
   };
 });

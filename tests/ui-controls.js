@@ -22,19 +22,19 @@ test("budget card shows every cost center with paid, ordered and requested amoun
   role("manager"); tab("dashboard");
   check(text().indexOf("Budget by cost center") >= 0);
   ["CC-100 Operations", "CC-200 Engineering", "CC-300 Maintenance", "CC-400 Quality"].forEach(c => check(text().indexOf(c) >= 0, c + " missing"));
-  check(text().indexOf("80% of $150k") >= 0 && text().indexOf("68% of $90k") >= 0 && text().indexOf("81% of $40k") >= 0 && text().indexOf("31% of $25k") >= 0, "percentages wrong");
+  check(text().indexOf("80% of $150k") >= 0 && text().indexOf("68% of $90k") >= 0 && text().indexOf("75% of $90k") >= 0 && text().indexOf("31% of $25k") >= 0, "percentages wrong");
   check(text().indexOf("$29,880 left") >= 0, "remaining for CC-100 missing");
   const tips = $$("#view .hb-track [data-tip]").map(e => e.getAttribute("data-tip")).join(" | ");
   check(tips.indexOf("of which paid $17,520") >= 0, "paid amount missing from the tooltip");
 });
 
-test("spend by category lists all four categories, with pipeline for the ones with no POs yet", () => {
+test("spend by category lists every category, with pipeline for the ones with no POs yet", () => {
   const card = $$("#view .card").find(c => c.querySelector("h3") && c.querySelector("h3").textContent.indexOf("Spend by category") === 0);
   const txt = card.textContent, tips = [...card.querySelectorAll("[data-tip]")].map(e => e.getAttribute("data-tip"));
-  ["Raw materials", "Components", "Packaging", "MRO"].forEach(c => check(txt.indexOf(c) >= 0, c + " missing"));
+  ["Raw materials", "Components", "Packaging", "MRO", "Services"].forEach(c => check(txt.indexOf(c) >= 0, c + " missing"));
   check(tips.indexOf("Raw materials: committed $100,520") >= 0, "raw materials committed missing " + tips);
   check(tips.some(x => /^Components: pipeline \$[1-9]/.test(x)), "components has pipeline but no POs yet");
-  check(card.querySelectorAll(".cc-group").length === 4 && $$("#view .hb-row").length === 4, "four categories and four cost centers");
+  check(card.querySelectorAll(".cc-group").length === 5 && $$("#view .hb-row").length === 4, "five categories and four cost centers");
 });
 
 test("document and price KPIs are on the dashboard", () => {
@@ -48,9 +48,9 @@ test("a request that passes its budget says so in the preview and adds the Execu
   const f = $('form[data-form="reqSubmit"]');
   change(f.elements.itemId, "MR-405");
   change(f.elements.costCenter, "CC-300 Maintenance");
-  f.elements.qty.value = "100"; f.elements.qty.dispatchEvent(new w.Event("input", { bubbles: true }));
+  f.elements.qty.value = "300"; f.elements.qty.dispatchEvent(new w.Event("input", { bubbles: true }));   // $25,200 against $22,620 left
   const p = $("#reqPreview").textContent;
-  check(p.indexOf("102%") >= 0 && p.indexOf("Executive must also approve") >= 0, "preview: " + p);
+  check(p.indexOf("103%") >= 0 && p.indexOf("Executive must also approve") >= 0, "preview: " + p);
   f.elements.reason.value = "Shutdown kits for the full plant";
   submit(f);
   check(/\d\. Executive: pending/.test(text()), "Executive should be a pending step in the chain");

@@ -49,14 +49,16 @@
       docs[sp.id] = { quality: "9999-12-31", origin: "9999-12-31", subtier: "9999-12-31" };
     });
     return {
-      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], audit: [], docs: docs, contacts: {}
+      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000 },
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], audit: [], docs: docs, contacts: {}
     };
   }
 
   // ---------- supplier documents ----------
   // Expired or missing documents block awards and POs. Expiring ones only warn.
+  // Service suppliers need a current quality certificate. Goods suppliers also need an origin declaration.
   function requiredDocs(category) {
+    if (category === "Services") return ["quality"];
     var req = ["quality", "origin"];
     if (REF.subtierCategories.indexOf(category) >= 0) req.push("subtier");
     return req;
@@ -79,7 +81,9 @@
   // All documents a supplier needs for the categories it sells in, with status.
   function supplierDocs(s, supId, today) {
     var sp = supplier(supId), have = (s.docs && s.docs[supId]) || {};
-    var need = sp.categories.some(function (c) { return REF.subtierCategories.indexOf(c) >= 0; }) ? ["quality", "origin", "subtier"] : ["quality", "origin"];
+    var need = ["quality"];
+    if (sp.categories.some(function (c) { return c !== "Services"; })) need.push("origin");
+    if (sp.categories.some(function (c) { return REF.subtierCategories.indexOf(c) >= 0; })) need.push("subtier");
     return need.map(function (k) {
       return { doc: k, label: REF.docTypes[k], expires: have[k] || null, status: docStatus(have[k], today) };
     });
@@ -347,7 +351,7 @@
     return x;
   }
   // Older saved RFx never had a technical review. Their quotes count as acceptable.
-  var techOk = function (x, q) { return !x.techRole || (q.tech && q.tech.result === "Acceptable"); };
+  var techOk = function (x, q) { return !x.techRole || !!(q.tech && q.tech.result === "Acceptable"); };
 
   // Price is scored on landed cost (price plus tariff plus freight), so a tariff can change the winner.
   // Pass the state and the current time to also check supplier documents and quote expiry.
@@ -566,8 +570,22 @@
   }
 
   // ---------- 4. goods receipt ----------
+  // What has arrived against a PO. For a service PO this counts service entries instead of goods receipts:
+  // accepted entries count as accepted, entries waiting for the Requester count like goods on hold
+  // (they use up the PO but cannot be invoiced yet), and rejected entries count as rejected.
   function grnTotals(s, poId) {
     var t = { accepted: 0, hold: 0, rejected: 0 };
+    var po = s.pos.find(function (p) { return p.id === poId; });
+    if (po && isService(po)) {
+      sesOf(s).forEach(function (e) {
+        if (e.poId !== poId) return;
+        if (e.status === "Accepted") t.accepted += e.qty;
+        else if (e.status === "Submitted") t.hold += e.qty;
+        else t.rejected += e.qty;
+      });
+      t.accepted = round2(t.accepted); t.hold = round2(t.hold); t.rejected = round2(t.rejected);
+      return t;
+    }
     s.grns.forEach(function (g) {
       if (g.poId !== poId) return;
       if (g.result === "Accepted") t.accepted += g.qty;
@@ -581,6 +599,7 @@
     need(role, ["warehouse"]);
     var po = getPO(s, poId);
     if (po.cancelled) fail("This PO is cancelled.");
+    if (isService(po)) fail(po.id + " is a service PO. The Buyer records a service entry and the Requester accepts it.");
     var qty = Number(f.qty);
     if (!Number.isInteger(qty) || qty <= 0) fail("Received quantity must be a whole number above zero.");
     if (["Accepted", "Rejected", "Hold"].indexOf(f.result) < 0) fail("Choose Accepted, Rejected or Hold.");
@@ -607,6 +626,57 @@
     return g;
   }
 
+  // ---------- 4b. service entries ----------
+  // A service PO is an estimated quantity (hours, days, weeks, months) at a rate. Each period the Buyer records the
+  // work from the supplier's report and the Requester accepts it, the service version of a goods receipt.
+  var round2 = function (n) { return Math.round(n * 100) / 100; };
+  var sesOf = function (s) { if (!s.ses) s.ses = []; if (!s.seq.SES) s.seq.SES = 7000; return s.ses; };
+  function isService(po) { var it = REF.items.find(function (i) { return i.id === po.itemId; }); return !!(it && it.service); }
+  var getSES = function (s, id) { return byId(sesOf(s), id, "Service entry"); };
+
+  function postService(s, role, now, poId, f) {
+    need(role, ["buyer"]);
+    var po = getPO(s, poId), it = item(po.itemId);
+    if (!isService(po)) fail(po.id + " is for goods. The Warehouse posts a goods receipt instead.");
+    if (po.cancelled) fail("This PO is cancelled.");
+    var qty = Number(f.qty);
+    if (!(qty > 0) || round2(qty) !== qty) fail("Quantity must be above zero, with at most two decimals.");
+    if (!/^\d{4}-\d{2}$/.test(f.period || "")) fail("Choose the month the work was done.");
+    var note = (f.note || "").trim();
+    if (note.length < 5) fail("Describe the work, as on the supplier's report.");
+    var t = grnTotals(s, poId), left = round2(po.qty - t.accepted - t.hold);
+    if (qty > left + 1e-9) {
+      fail("That would take " + po.id + " past its ordered quantity. Only " + left + " " + it.uom + "s (" + fmt(left * po.unitPrice) +
+        ") remain. The Requester must raise a new request for more.");
+    }
+    var e = { id: nextId(s, "SES", "SES"), poId: poId, period: f.period, qty: qty, value: round2(qty * po.unitPrice), note: note,
+      status: "Submitted", by: role, at: now, decidedAt: null, decisionNote: "" };
+    sesOf(s).push(e);
+    log(s, now, role, e.id, "Service entry recorded on " + po.id + ": " + qty + " " + it.uom + "s for " + f.period, fmt(e.value) + ". " + note);
+    return e;
+  }
+
+  function decideService(s, role, now, sesId, decision, note) {
+    need(role, ["requester"]);
+    var e = getSES(s, sesId);
+    if (e.status !== "Submitted") fail("This service entry is already " + e.status.toLowerCase() + ".");
+    if (decision !== "Accepted" && decision !== "Rejected") fail("Choose Accepted or Rejected.");
+    var n = (note || "").trim();
+    if (decision === "Rejected" && n.length < 5) fail("Say what is wrong with the entry, so the Buyer can correct it with the supplier.");
+    e.status = decision; e.decidedAt = now; e.decisionNote = n;
+    log(s, now, role, e.id, "Service entry " + decision.toLowerCase() + " for " + e.poId, n || fmt(e.value) + " confirmed as done");
+    return e;
+  }
+
+  // Ordered, accepted, waiting and remaining value on a service PO. warn is true once the share used passes REF.serviceWarnPct.
+  function serviceStatus(s, po) {
+    var t = grnTotals(s, po.id), ordered = round2(po.qty * po.unitPrice);
+    var acc = round2(t.accepted * po.unitPrice), wait = round2(t.hold * po.unitPrice), left = round2(ordered - acc - wait);
+    var pct = ordered ? Math.round(100 * (acc + wait) / ordered) : 0;
+    return { qty: po.qty, acceptedQty: t.accepted, waitingQty: t.hold, leftQty: round2(po.qty - t.accepted - t.hold),
+      ordered: ordered, accepted: acc, waiting: wait, remaining: left, pct: pct, warn: pct >= (REF.serviceWarnPct || 80) };
+  }
+
   // ---------- PO status ----------
   function invoicedQty(s, poId, exceptId, statuses) {
     return sum(s.invoices.filter(function (i) {
@@ -617,6 +687,11 @@
   function poStatus(s, po) {
     if (po.cancelled) return "Cancelled";
     var t = grnTotals(s, po.id);
+    if (isService(po)) {
+      if (t.accepted >= po.qty) return invoicedQty(s, po.id, null, ["Paid"]) >= po.qty ? "Closed" : "Consumed";
+      if (t.accepted > 0 || t.hold > 0) return "In progress";
+      return po.confirmed ? "Confirmed" : "Issued";
+    }
     if (t.accepted >= po.qty) {
       return invoicedQty(s, po.id, null, ["Paid"]) >= po.qty ? "Closed" : "Received";
     }
@@ -626,6 +701,8 @@
   }
 
   function ctb(s, po) {
+    // Services are not shipments, so delivery health does not apply.
+    if (isService(po)) return { status: "Service", slack: null };
     var st = poStatus(s, po);
     if (st === "Received" || st === "Closed" || st === "Cancelled") return { status: "Delivered", slack: null };
     var slack = daysBetween(po.promisedDate, po.needBy);
@@ -670,6 +747,7 @@
   function expediteList(s, now) {
     var today = dateOf(now), rows = [];
     s.pos.forEach(function (po) {
+      if (isService(po)) return;
       var st = poStatus(s, po);
       if (["Issued", "Confirmed", "Partially received"].indexOf(st) < 0) return;
       var left = leftToReceive(s, po);
@@ -748,6 +826,7 @@
 
   // ---------- 5. invoice and three way match ----------
   function matchInvoice(s, inv) {
+    var svc = isService(getPO(s, inv.poId)), uom = svc ? item(getPO(s, inv.poId).itemId).uom : "unit";
     var po = getPO(s, inv.poId), issues = [];
     var dup = s.invoices.some(function (o) {
       return o.id !== inv.id && o.supplierId === inv.supplierId && o.status !== "Rejected" &&
@@ -757,12 +836,16 @@
     var invoiceable = t.accepted - invoicedQty(s, po.id, inv.id, ["Matched", "Paid"]);
     if (dup) issues.push({ code: "DUPLICATE", owner: "ap", msg: "Invoice number " + inv.invNo + " is already on file for this supplier." });
     if (invoiceable <= 0) {
-      issues.push({ code: "NO_RECEIPT", owner: "warehouse",
+      if (svc) issues.push({ code: "NO_RECEIPT", owner: t.hold > 0 ? "requester" : "buyer",
+        msg: t.hold > 0 ? "No accepted service yet. " + t.hold + " " + uom + "s are recorded and waiting for the Requester to accept them."
+                        : "No service entry is recorded against this PO. The Buyer records it from the supplier's report." });
+      else issues.push({ code: "NO_RECEIPT", owner: "warehouse",
         msg: t.hold > 0 ? "No accepted receipt yet. " + t.hold + " units are on quality hold."
                         : "No accepted goods receipt is posted against this PO." });
     } else if (inv.qty > invoiceable) {
-      issues.push({ code: "QTY_OVER", owner: "warehouse",
-        msg: "Invoice bills " + inv.qty + " units but only " + invoiceable + " are accepted and not yet invoiced." });
+      issues.push({ code: "QTY_OVER", owner: svc ? (t.hold > 0 ? "requester" : "buyer") : "warehouse",
+        msg: "Invoice bills " + inv.qty + " " + uom + "s but only " + invoiceable + " are accepted and not yet invoiced." +
+          (svc && t.hold > 0 ? " " + t.hold + " more are waiting for the Requester's acceptance." : "") });
     } else if (inv.qty < invoiceable) {
       issues.push({ code: "QTY_UNDER", owner: "ap",
         msg: "Invoice bills " + inv.qty + " units but " + invoiceable + " are accepted and not yet invoiced." });
@@ -781,7 +864,10 @@
     var no = (f.invNo || "").trim();
     var qty = Number(f.qty), price = Number(f.unitPrice);
     if (!no) fail("Enter the supplier invoice number.");
-    if (!Number.isInteger(qty) || qty <= 0) fail("Invoiced quantity must be a whole number above zero.");
+    // Service invoices bill hours or days, which can carry two decimals. Goods are billed in whole units.
+    if (isService(po) ? !(qty > 0) || round2(qty) !== qty : !Number.isInteger(qty) || qty <= 0) {
+      fail(isService(po) ? "Invoiced quantity must be above zero, with at most two decimals." : "Invoiced quantity must be a whole number above zero.");
+    }
     if (!(price > 0)) fail("Invoiced unit price must be above zero.");
     if (!validDate(f.date)) fail("Enter the invoice date.");
     var sp = supplier(po.supplierId);
@@ -842,12 +928,14 @@
     else if (kind === "PO") { po = find(s.pos, "id"); if (po) req = getReq(s, po.requestId); }
     else if (kind === "GRN") { g = find(s.grns, "id"); if (g) { po = getPO(s, g.poId); req = getReq(s, po.requestId); } }
     else if (kind === "INV") { inv = find(s.invoices, "id"); if (inv) { po = getPO(s, inv.poId); req = getReq(s, po.requestId); } }
+    else if (kind === "SES") { g = find(sesOf(s), "id"); if (g) { po = getPO(s, g.poId); req = getReq(s, po.requestId); } }
     if (!req) return null;
     if (!x && req.rfxId) x = getRfx(s, req.rfxId);
     if (!po && req.poId) po = getPO(s, req.poId);
     return {
       kind: kind, id: id, request: req, rfx: x, po: po,
       grns: po ? s.grns.filter(function (r) { return r.poId === po.id; }) : [],
+      ses: po ? sesOf(s).filter(function (r) { return r.poId === po.id; }) : [], service: po ? isService(po) : !!item(req.itemId).service,
       invoices: po ? s.invoices.filter(function (r) { return r.poId === po.id; }) : []
     };
   }
@@ -885,7 +973,10 @@
     }).length, "rfx");
     var openPOs = s.pos.filter(function (po) { return ["Issued", "Confirmed", "Partially received"].indexOf(poStatus(s, po)) >= 0; });
     var invFor = function (who) { return s.invoices.filter(function (i) { return invOwners(i).indexOf(who) >= 0; }).length; };
+    var sesWaiting = sesOf(s).filter(function (e) { return e.status === "Submitted"; }).length;
     if (role === "requester") {
+      add("Service entries waiting for your acceptance", sesWaiting, "services");
+      add("Invoices waiting on your service acceptance", invFor("requester"), "invoices");
       // Only the requester's own requests. The name is the persona on the Requester role, the same name the request form saves.
       var me = (REF.roles.find(function (x) { return x.id === "requester"; }) || { persona: "" }).persona.split(",")[0];
       add("Your requests that were rejected", s.requests.filter(function (r) { return r.status === "Rejected" && r.requester === me; }).length, "requests");
@@ -903,7 +994,11 @@
       add("RFx ready for your award recommendation", s.rfx.filter(function (x) { return x.status === "Evaluating"; }).length, "rfx");
       add("POs not yet confirmed by supplier", s.pos.filter(function (po) { return poStatus(s, po) === "Issued"; }).length, "pos");
       add("POs to chase with the supplier", expediteList(s, now || new Date().toISOString()).length, "expedite");
-      add("Invoice price exceptions", invFor("buyer"), "invoices");
+      add("Invoice exceptions on your desk", invFor("buyer"), "invoices");
+      add("Service entries rejected by the Requester", sesOf(s).filter(function (e) { return e.status === "Rejected"; }).length, "services");
+      add("Service POs over " + (REF.serviceWarnPct || 80) + "% used", s.pos.filter(function (po) {
+        return isService(po) && !po.cancelled && poStatus(s, po) !== "Closed" && serviceStatus(s, po).warn;
+      }).length, "services");
     } else if (role === "warehouse") {
       add("POs open for receiving", openPOs.length, "pos");
       add("Invoice exceptions needing a receipt check", invFor("warehouse"), "invoices");
@@ -919,7 +1014,7 @@
     var cnt = function (st) { return s.requests.filter(function (r) { return r.status === st; }).length; };
     var open = s.pos.filter(function (po) { return ["Received", "Closed", "Cancelled"].indexOf(poStatus(s, po)) < 0; });
     var ctbCounts = { Clear: 0, "At Risk": 0, Late: 0 };
-    open.forEach(function (po) { ctbCounts[ctb(s, po).status] += 1; });
+    open.forEach(function (po) { if (!isService(po)) ctbCounts[ctb(s, po).status] += 1; });
     // Committed spend is the landed value of issued POs. Pipeline is what approved or pending requests still hold.
     var spend = {}, pipeline = {};
     REF.categories.forEach(function (c) { spend[c] = 0; pipeline[c] = 0; });
@@ -964,6 +1059,7 @@
     techEvaluate: techEvaluate, techSubmit: techSubmit, recommendAward: recommendAward, decideAward: decideAward, techReviewer: techReviewer,
     createPO: createPO, confirmPO: confirmPO, updatePromise: updatePromise, amendPOPrice: amendPOPrice,
     grnTotals: grnTotals, postGRN: postGRN, releaseHold: releaseHold,
+    isService: isService, postService: postService, decideService: decideService, serviceStatus: serviceStatus,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
     rejectInvoice: rejectInvoice, payInvoice: payInvoice, invOwners: invOwners,

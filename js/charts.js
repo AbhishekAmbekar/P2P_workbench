@@ -47,7 +47,7 @@
     var max = niceMax(Math.max.apply(null, cats.map(function (c) { return Math.max(spend[c], pipeline[c]); })));
     var ticks = [1, 0.5, 0];
     return '<div class="ch-legend"><span class="lg-com">Committed (issued POs)</span><span class="lg-pipe">Pipeline (requested, not yet ordered)</span></div>' +
-      '<div class="ch-cols"><div class="cc-axis">' + ticks.map(function (t) { return "<span>" + short(max * t) + "</span>"; }).join("") + "</div>" +
+      '<div class="ch-cols" style="--n:' + cats.length + '"><div class="cc-axis">' + ticks.map(function (t) { return "<span>" + short(max * t) + "</span>"; }).join("") + "</div>" +
       '<div class="cc-plot">' + ticks.map(function (t) { return '<b class="cc-grid" style="bottom:' + (t * 100) + '%"></b>'; }).join("") +
       cats.map(function (c) {
         var col = function (cls, v, what) {
@@ -55,7 +55,7 @@
         };
         return '<div class="cc-group">' + col("m-com", spend[c], "committed") + col("m-pipe", pipeline[c], "pipeline") + "</div>";
       }).join("") + "</div></div>" +
-      '<div class="cc-x"><span></span>' + cats.map(function (c) {
+      '<div class="cc-x" style="--n:' + cats.length + '"><span></span>' + cats.map(function (c) {
         return "<span><b>" + esc(c) + "</b>" + esc(typeOf[c]) + "</span>";
       }).join("") + "</div>";
   };

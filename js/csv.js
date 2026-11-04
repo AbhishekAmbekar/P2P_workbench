@@ -157,7 +157,7 @@
         var base = [x.id, x.type, x.status, x.requestId, r.prNo, r.itemId, r.qty, x.weights.price + "/" + x.weights.lead + "/" + x.weights.quality];
         var ranked = P.scoreRFx(x, s, now);
         ranked.forEach(function (q, i) {
-          var why = q.eligible ? (q.expired ? "Quote expired" : "Yes") : !q.techOk ? "No, fails the technical check" :
+          var why = q.eligible ? (q.expired ? "Quote expired" : "Yes") : q.tech === "Pending" ? "Waiting for the technical review" : !q.techOk ? "No, fails the technical check" :
             q.supplierStatus === "Not qualified" ? "No, not qualified" : "No, document expired or missing";
           rows.push(base.concat([supName(q.supplierId), q.supplierStatus, "Quoted", m2(q.unitPrice), q.tariffPct, m2(q.freight), m2(q.landed), q.leadDays,
             q.validUntil, q.terms, q.total, i + 1, why, yes(x.award && x.award.supplierId === q.supplierId), q.tech, q.techNote]));
@@ -197,6 +197,14 @@
         s.grns.map(function (g) {
           var po = s.pos.find(function (p) { return p.id === g.poId; }) || {}, it = item(po.itemId) || {};
           return [g.id, g.poId, supName(po.supplierId), po.itemId, it.name, g.date, g.qty, g.result, g.note, g.releaseNote];
+        }));
+    } },
+
+    services: { file: "service-entries", label: "service entries", build: function (s) {
+      return [["Entry", "PO", "Supplier", "Service", "Unit", "Month", "Quantity", "Rate", "Value", "Work done", "Status", "Requester note"]].concat(
+        (s.ses || []).map(function (e) {
+          var po = s.pos.find(function (p) { return p.id === e.poId; }) || {}, it = item(po.itemId) || {};
+          return [e.id, e.poId, supName(po.supplierId), it.name, it.uom, e.period, e.qty, m2(po.unitPrice), m2(e.value), e.note, e.status, e.decisionNote];
         }));
     } },
 
