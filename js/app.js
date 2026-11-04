@@ -162,6 +162,7 @@
     }
     sel.value = App.role;
     drawRolePick();
+    if (App.drawSearchBox) App.drawSearchBox();
 
     var badges = {};
     P.queueFor(App.state, App.role, App.now()).forEach(function (q) { badges[q.tab] = (badges[q.tab] || 0) + q.count; });

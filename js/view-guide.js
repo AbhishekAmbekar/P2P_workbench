@@ -46,6 +46,9 @@
         "<p>For every open PO, slack is the need by date minus the supplier promise date. Under 5 days is At Risk. Below zero is Late. Move a promise date on the PO screen to see the status change.</p>") +
       section("Expedite and email drafts",
         "<p>The Expedite tab lists open POs that need a nudge, worst first: overdue, late, at risk, then not confirmed. As the Buyer, pick one and the app writes a short chase message from the PO record. You can edit it, then open it in your own mail program, Gmail or Outlook, copy it, or download it as a draft file. The app never sends mail itself and cannot tell whether you sent it, so the audit trail records only that a draft was opened. Demo suppliers have no email address, so type one in and the app can remember it for that supplier.</p>") +
+      section("Search",
+        "<p>Use the search box at the top, or press Ctrl K (Cmd K on a Mac) or the / key. Type a record number such as PO-4001 or PR-2001, part of one such as po-40, the supplier's own invoice number, a supplier, an item, a status such as late, at risk or hold, or a screen such as receipts. " +
+        "Every word you type must match, so adding words narrows the list. Use the arrow keys and Enter, or click. With the box empty it shows the records you opened last on this device.</p>") +
       section("Record pages and links",
         "<p>Every request, PR, RFx, PO, receipt and invoice has its own page. Open one with the Full record button on its screen, a record number in the audit trail, or a link such as #PO-4001 at the end of the address. " +
         "The page shows the key facts, the document flow from request to invoice, and the details, price, approvals, receipts, invoices and history. Each step in the flow opens that record. " +
