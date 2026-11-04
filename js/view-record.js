@@ -47,9 +47,7 @@
       return "<dt>" + esc(r[0]) + "</dt><dd>" + r[1] + "</dd>";
     }).join("") + "</dl>";
   }
-  function section(title, body, note, full) {
-    return '<div class="card sec' + (full ? " full" : "") + '"><h3>' + esc(title) + (note ? "<small>" + esc(note) + "</small>" : "") + "</h3>" + body + "</div>";
-  }
+  function section(title, body, note, full) { return App.card(title, body, note, full); }
   function table(head, rows, empty) {
     if (!rows.length) return '<p class="empty pad">' + esc(empty) + "</p>";
     return '<div class="wrap flat"><table><tr>' + head.map(function (h) {
@@ -274,10 +272,12 @@
       section("Agreed rates", table(["Item", "Unit", "#Rate", "#Standard"], c.lines.map(function (l) {
         var it = App.item(l.itemId); return [esc(it.id + " " + it.name), esc(it.uom), money(l.price), money(it.stdPrice)];
       }), "")) +
-      (c.status === "Approved" ? section("Consumption", '<div class="pad">' + App.contractBar(c) + "</div>" +
+      // Every contract shows the same blocks in the same order. Before approval the consumption block says why it is empty.
+      section("Consumption", c.status === "Approved" ? '<div class="pad">' + App.contractBar(c) + "</div>" +
         table(["Release", "Item", "#Quantity", "#Value", "Status"], st.pos.map(function (po) {
           return [App.recLink(po.id), esc(po.itemId), n(po.qty), money(po.qty * po.unitPrice), App.status(P.poStatus(s, po))];
-        }), "No releases yet."), "Each PO from this contract is a release", true) : "") +
+        }), "No releases yet.") : '<p class="empty pad">' + (c.status === "Rejected" ? "This contract was rejected, so nothing can be released from it." :
+          "No releases until the contract is approved.") + "</p>", "Each PO from this contract is a release", true) +
       section("Approval", table(["Approver", "Status", "Date", "Note"], c.approvals.map(function (a) {
         return [esc(P.roleLabel(a.role)), App.status(a.status === "Pending" ? (c.status === "Pending approval" && c.approvals.find(function (x) { return x.status === "Pending"; }) === a ? "Waiting" : "Not yet") : a.status), day(a.at), esc(a.note)];
       }), ""), "Director, plus the Executive from " + money(REF.thresholds.executive).replace(/\.00$/, "")) +

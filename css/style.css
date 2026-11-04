@@ -165,8 +165,15 @@ a.rec:hover,.crumb a:hover,.fstep a:hover{text-decoration:underline}
 .fstep em{display:block;font-style:normal;font-size:var(--fs-sm);color:var(--mut)}
 .fstep.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--accbg)}
 .fstep.next{border-style:dashed;background:transparent}.fstep.next b{color:var(--mut);font-weight:500}
-.secs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(520px,100%),1fr));gap:16px;align-items:start}
-.sec{padding:0;overflow:hidden}
+/* Card grid: two equal columns on wide screens, one on narrow ones. Every card has the same fixed height and its body
+   scrolls, so cards line up and keep their size as records are added. A card alone in its row spans the row (App.evenCards). */
+.secs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch}
+@media (max-width:1100px){.secs{grid-template-columns:minmax(0,1fr)}}
+.sec{padding:0;overflow:hidden;display:flex;flex-direction:column;height:var(--sec-h,380px);margin:0}
+.sec > h3{flex:none}
+.secbody{flex:1 1 auto;min-height:0;overflow:auto}
+.secbody .wrap{overflow:visible}
+.secbody th{position:sticky;top:0;z-index:1}
 .sec.full{grid-column:1 / -1}
 .sec h3{display:flex;align-items:baseline;gap:8px;margin:0;padding:12px 16px;border-bottom:1px solid var(--line)}
 .sec h3 small{margin-left:auto;font-weight:400;font-size:var(--fs-sm);color:var(--mut)}
@@ -282,3 +289,7 @@ body.sp-on{overflow:hidden}
 .svcnote { min-width: 220px; }
 .svcdecide input { min-width: 160px; }
 .barnote{font-size:12px;color:var(--mut);margin:6px 0 0}
+.deskbody p{margin:2px 0 10px;color:var(--mut)}
+/* Inside fixed cards a long first cell, such as an item name or an exception message, wraps instead of widening the card. */
+.secbody td:first-child{white-space:normal;min-width:7.5em}
+.secbody th,.secbody td{padding:8px 10px}

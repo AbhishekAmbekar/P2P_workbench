@@ -83,9 +83,10 @@
         }).join("") + "</ul>"
       : '<p class="empty">Nothing is waiting on you right now.</p>';
 
-    var card = function (title, body, note) { return '<div class="card"><h3>' + esc(title) + (note ? ' <span class="h3note">' + esc(note) + "</span>" : "") + "</h3>" + body + "</div>"; };
-    var desk = '<div class="card me"><h3>' + esc(role.label) + " desk</h3><p>" + esc(role.persona) + ". " + esc(role.desc) + "</p>" +
-      '<div class="hint" style="margin-bottom:8px">You can: ' + esc(role.can) + "</div>" + queue + "</div>";
+    // Fixed height cards in the two column card grid, the same as record pages. Long lists scroll inside the card.
+    var card = function (title, body, note, full) { return App.card(title, '<div class="pad">' + body + "</div>", note, full); };
+    var desk = App.card(role.label + " desk", '<div class="pad deskbody"><p>' + esc(role.persona) + ". " + esc(role.desc) + "</p>" +
+      '<div class="hint" style="margin-bottom:8px">You can: ' + esc(role.can) + "</div>" + queue + "</div>").replace('class="card sec', 'class="card sec me');
     var tiles = '<div class="grid g4">' +
         kpi(m.cycleDays === null ? "n/a" : m.cycleDays + " d", "Average days from approval to PO") +
         kpi(m.firstPass === null ? "n/a" : m.firstPass + "%", "Invoices matched first time") +
@@ -98,22 +99,22 @@
     var spend = card("Spend by category", App.charts.spend(App.REF.categories, m.spend, m.pipeline, App.REF.categoryType), "Landed cost");
     var delivery = card("Delivery health", deliveryChart(m), "Open POs");
     var invoices = card("Invoices", invoiceChart(s, m), "By status");
-    var late = card("Late and at risk POs", '<div class="wrap" style="border:0">' + lateList(s) + "</div>");
-    var flow = card("Pipeline", pipeline(s));
+    var late = card("Late and at risk POs", '<div class="wrap flat">' + lateList(s) + "</div>", "Worst first");
+    // The pipeline is one short row across the page, so it stays a plain card outside the grid.
+    var flow = '<div class="card"><h3>Pipeline</h3>' + pipeline(s) + "</div>";
 
     // The Manager, Director and VP oversee the whole cycle: approvals first, then money and risk.
     if (App.oversees()) {
       return "<h2>Oversight</h2>" + '<p class="hint">Approvals waiting on you, then budget, spend, delivery risk and invoice exceptions across the whole cycle.</p>' +
         '<div class="dash">' +
-        '<div class="grid g2">' + desk + delivery + "</div>" +
-        '<div class="grid g2">' + budget + spend + "</div>" +
-        '<div class="grid g2">' + invoices + card("Invoice exceptions by value", '<div class="wrap" style="border:0">' + exceptionList(s) + "</div>", "Largest first") + "</div>" +
-        tiles + flow + late + "</div>";
+        '<div class="secs">' + desk + delivery + budget + spend + invoices +
+        card("Invoice exceptions by value", '<div class="wrap flat">' + exceptionList(s) + "</div>", "Largest first") + "</div>" +
+        tiles + flow + '<div class="secs">' + late + "</div></div>";
     }
     return "<h2>Dashboard</h2>" + '<p class="hint">' + "What is waiting on you, delivery health, budgets and spend.</p>" +
       '<div class="dash">' +
-      '<div class="grid g2">' + desk + '<div class="stackcol">' + delivery + invoices + "</div></div>" +
+      '<div class="secs">' + desk + delivery + invoices + late + "</div>" +
       flow + tiles +
-      '<div class="grid g2">' + budget + spend + "</div>" + late + "</div>";
+      '<div class="secs">' + budget + spend + "</div></div>";
   };
 })();

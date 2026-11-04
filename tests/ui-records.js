@@ -51,6 +51,21 @@ test("a contract PO shows its contract in the flow and links to the contract pag
   check(text().indexOf("MRO spares rate contract") >= 0 && text().indexOf("PO-4004") >= 0 && text().indexOf("Agreed rates") >= 0, "contract page");
 });
 
+test("every contract page shows the same blocks in the same order", () => {
+  const order = id => { w.App.openRecord(id); return $$(".secs > .sec h3").map(h => h.childNodes[0].textContent.trim()).join("|"); };
+  const approved = order("CT-8001");
+  check(approved === "Terms|Agreed rates|Consumption|Approval|History", approved);
+  check(order("CT-8004") === approved, "a pending contract keeps the same blocks");
+  check(text().indexOf("No releases until the contract is approved") >= 0);
+});
+
+test("cards are fixed size with a scrolling body, and a card alone in its row spans the row", () => {
+  w.App.openRecord("GRN-5001");
+  const cards = $$(".secs > .sec");
+  check(cards.length === 3 && cards.every(c => c.querySelector(".secbody")), "each card has a scrolling body");
+  check(!cards[0].classList.contains("full") && !cards[1].classList.contains("full") && cards[2].classList.contains("lone"), "the third card spans its row");
+});
+
 test("an unknown record says so instead of breaking", () => {
   w.App.openRecord("PO-9999");
   check(h2() === "PO-9999 not found");

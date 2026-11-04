@@ -56,6 +56,23 @@
     if (ct && r.qty * ct.line.price <= P.contractStatus(App.state, ct.contract, App.today()).remaining + 0.005) return "Contract " + ct.contract.id;
     return total >= REF.thresholds.rfx ? "Needs RFx" : "Direct buy";
   };
+  // A titled card of fixed height for the two column card grid (.secs). The body scrolls when it holds more than fits,
+  // so cards keep one size however many records they list. Used by record pages and screen detail panels.
+  App.card = function (title, body, note, full) {
+    return '<div class="card sec' + (full ? " full" : "") + '"><h3>' + App.esc(title) + (note ? "<small>" + App.esc(note) + "</small>" : "") + "</h3>" +
+      '<div class="secbody">' + body + "</div></div>";
+  };
+  // In a two column card grid, a card left alone in its row spans the row, so no empty gap is left beside it.
+  App.evenCards = function (root) {
+    (root || document).querySelectorAll(".secs").forEach(function (grid) {
+      var run = [];
+      var close = function () { if (run.length % 2) run[run.length - 1].classList.add("full", "lone"); run = []; };
+      Array.prototype.forEach.call(grid.children, function (el) {
+        if (el.classList.contains("full")) close(); else run.push(el);
+      });
+      close();
+    });
+  };
   App.status = function (s) { return App.pill(s, STATUS_KIND[s] || "mut"); };
 
   // ---------- persistence ----------
@@ -239,6 +256,7 @@
     // Dates in table cells stay on one line instead of breaking at the hyphen.
     html = html.replace(/<td>(\d{4}-\d\d-\d\d)<\/td>/g, '<td class="nw">$1</td>');
     document.getElementById("view").innerHTML = html;
+    App.evenCards(document.getElementById("view"));
     syncHash();
   };
 
