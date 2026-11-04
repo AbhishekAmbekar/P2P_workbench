@@ -22,18 +22,19 @@ test("budget card shows every cost center with paid, ordered and requested amoun
   role("manager"); tab("dashboard");
   check(text().indexOf("Budget by cost center") >= 0);
   ["CC-100 Operations", "CC-200 Engineering", "CC-300 Maintenance", "CC-400 Quality"].forEach(c => check(text().indexOf(c) >= 0, c + " missing"));
-  check(text().indexOf("80% used") >= 0 && text().indexOf("68% used") >= 0 && text().indexOf("81% used") >= 0 && text().indexOf("31% used") >= 0, "percentages wrong");
+  check(text().indexOf("80% of $150k") >= 0 && text().indexOf("68% of $90k") >= 0 && text().indexOf("81% of $40k") >= 0 && text().indexOf("31% of $25k") >= 0, "percentages wrong");
   check(text().indexOf("$29,880 left") >= 0, "remaining for CC-100 missing");
-  check(text().indexOf("Paid $17,520") >= 0, "paid amount missing");
+  const tips = $$("#view .hb-track [data-tip]").map(e => e.getAttribute("data-tip")).join(" | ");
+  check(tips.indexOf("of which paid $17,520") >= 0, "paid amount missing from the tooltip");
 });
 
 test("spend by category lists all four categories, with pipeline for the ones with no POs yet", () => {
-  const card = $$("#view .card").find(c => c.querySelector("h3") && c.querySelector("h3").textContent === "Spend by category");
-  const txt = card.textContent;
+  const card = $$("#view .card").find(c => c.querySelector("h3") && c.querySelector("h3").textContent.indexOf("Spend by category") === 0);
+  const txt = card.textContent, tips = [...card.querySelectorAll("[data-tip]")].map(e => e.getAttribute("data-tip"));
   ["Raw materials", "Components", "Packaging", "MRO"].forEach(c => check(txt.indexOf(c) >= 0, c + " missing"));
-  check(txt.indexOf("$100,520 committed") >= 0, "raw materials committed missing");
-  check(txt.indexOf("in pipeline") >= 0, "pipeline wording missing");
-  check($$("#view .brow").length >= 8, "four categories plus four cost centers expected");
+  check(tips.indexOf("Raw materials: committed $100,520") >= 0, "raw materials committed missing " + tips);
+  check(tips.some(x => /^Components: pipeline \$[1-9]/.test(x)), "components has pipeline but no POs yet");
+  check(card.querySelectorAll(".cc-group").length === 4 && $$("#view .hb-row").length === 4, "four categories and four cost centers");
 });
 
 test("document and price KPIs are on the dashboard", () => {

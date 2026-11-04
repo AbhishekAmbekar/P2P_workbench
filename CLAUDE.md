@@ -12,7 +12,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 
 ## Structure
 
-- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `search.js`, `seed.js`, `app.js`, `csv-ui.js`, `search-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file. Every css and js link ends in `?v=N`. Raise N by one in any pull request that changes a css or js file, or browsers keep the old copy for up to 10 minutes after a merge.
+- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `search.js`, `seed.js`, `app.js`, `csv-ui.js`, `search-ui.js`, `charts.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file. Every css and js link ends in `?v=N`. Raise N by one in any pull request that changes a css or js file, or browsers keep the old copy for up to 10 minutes after a merge.
 - `js/data.js`: reference data. Thresholds, roles, role focus (`focus`: the screens each role works on and views, and `screenOwners`: who works on each screen), cost centers and budgets, spend categories, suppliers, items.
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
 - `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
@@ -20,6 +20,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 - `js/search-ui.js`: the header search box and panel. Ctrl K, Cmd K or / opens it (/ only when not typing in a field). Recently opened records are kept under the separate key `p2p-workbench-recent`.
 - `js/seed.js`: builds the demo by running real engine actions with backdated times.
 - `js/app.js`: shell, the Working as menu (a button and list that open downward, with the hidden `#roleSel` select holding the value), sidebar sections (`App.tabs`, with `group` labels), saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
+- `js/charts.js`: `App.charts.budget`, `.spend` and `.split` return plain HTML charts. Committed is indigo `#4338ca`, pipeline orange `#eb6834`: this pair passed the dataviz palette validator (lightness band, color blind and normal vision separation, contrast). States use the status colors and always carry a written label. Marks carry `data-tip`; the shell in `app.js` shows it as a tooltip on hover, focus or tap.
 - `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
 - `js/view-record.js`: the full page for one record (REQ, PR, RFX, PO, GRN, INV), built on `P.docFlow`. Read only. `App.openRecord(id)`, `App.recLink(id)` and `App.recBtn(id)` open it. The address shows `#tab` or `#PO-4001`, and opening a record adds a Back step.
 - `js/view-*.js`: one file per screen. Events use `data-act`, `data-form` and `data-change` attributes and `App.actions.*`.
@@ -60,19 +61,21 @@ The screen tests need jsdom installed in a folder outside the repo. Pass an abso
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
 
-Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN or INV and a number). Role focus part 1 is done: sidebar groups per role from `REF.focus` (`App.focus`, `App.viewOnly` in `app.js`), the view only line in the band, default filters on Requests and Purchase orders (reset when the role changes), Import shown only to the role that runs it. Known gap: the Requester's sidebar badge counts all rejected requests, not only their own. Next: part 2, the oversight home for the Director and VP with dashboard charts in plain SVG. Then:
+Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN or INV and a number). Role focus part 1 is done: sidebar groups per role from `REF.focus` (`App.focus`, `App.viewOnly` in `app.js`), the view only line in the band, default filters on Requests and Purchase orders (reset when the role changes), Import shown only to the role that runs it. Known gap: the Requester's sidebar badge counts all rejected requests, not only their own. Part 2 is done: dashboard charts for everyone, and an Oversight home for the Director and VP (approvals, charts, invoice exceptions by value).
+
+Next, agreed with the owner: **service POs and consumption**. From the owner's own planner work: material POs are cleared by receipt, but service POs are consumed over time. Plan: service items ordered as a value, monthly service entries recorded and accepted by the Requester (the service version of a goods receipt), the PO page showing ordered, accepted and remaining value with a warning near the limit, invoices for services matched exactly against accepted, not yet invoiced service value, and a clearing list showing invoices blocked on a receipt or service confirmation. Build it with planned item 4 (contracts, blanket orders and releases), since both consume a PO over time. Then:
 
 1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.
 3. Supplier scorecard from receipt and invoice history.
-4. Contracts with dates and remaining volume, blanket orders and releases.
+4. Contracts with dates and remaining volume, blanket orders and releases (to be built with service POs, above).
 5. Returns and credit notes for rejected goods.
 6. Reorder points and safety stock for MRO items.
 7. Spend analysis over time, and a planning view (requirements against stock and open POs) as a separate module.
