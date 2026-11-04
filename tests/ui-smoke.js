@@ -11,7 +11,7 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const dom = new JSDOM(html, { runScripts: "outside-only", url: "http://localhost/", pretendToBeVisual: true });
 const w = dom.window;
 w.scrollTo = () => {};
-const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
+const scripts = [...html.matchAll(/<script src="([^"?]+)(?:\?v=\d+)?"><\/script>/g)].map(m => m[1]);
 scripts.forEach(src => w.eval(fs.readFileSync(path.join(root, src), "utf8") + "\n//# sourceURL=" + src));
 w.eval("App.start();");
 

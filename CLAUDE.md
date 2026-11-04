@@ -12,7 +12,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 
 ## Structure
 
-- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `search.js`, `seed.js`, `app.js`, `csv-ui.js`, `search-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file.
+- `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `search.js`, `seed.js`, `app.js`, `csv-ui.js`, `search-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file. Every css and js link ends in `?v=N`. Raise N by one in any pull request that changes a css or js file, or browsers keep the old copy for up to 10 minutes after a merge.
 - `js/data.js`: reference data. Thresholds, roles, cost centers and budgets, spend categories, suppliers, items.
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
 - `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
