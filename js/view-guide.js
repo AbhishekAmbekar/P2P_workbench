@@ -50,7 +50,7 @@
         "<p>Use the search box at the top, or press Ctrl K (Cmd K on a Mac) or the / key. Type a record number such as PO-4001 or PR-2001, part of one such as po-40, the supplier's own invoice number, a supplier, an item, a status such as late, at risk or hold, or a screen such as receipts. " +
         "Every word you type must match, so adding words narrows the list. Use the arrow keys and Enter, or click. With the box empty it shows the records you opened last on this device.</p>") +
       section("Record pages and links",
-        "<p>Every request, PR, RFx, PO, receipt and invoice has its own page. Open one with the Full record button on its screen, a record number in the audit trail, or a link such as #PO-4001 at the end of the address. " +
+        "<p>Every request, PR, RFx, PO, receipt and invoice has its own page. Open one by clicking its number in any table, with the Full record button on its screen, from search, or with a link such as #PO-4001 at the end of the address. Clicking elsewhere on a row still opens the quick panel on that screen. " +
         "The page shows the key facts, the document flow from request to invoice, and the details, price, approvals, receipts, invoices and history. Each step in the flow opens that record. " +
         "Record pages are for reading. Press Work on it to open the record on its own screen and act on it. The browser Back button takes you back.</p>") +
       section("CSV import and export",
