@@ -73,4 +73,13 @@ test("the PO page shows consumption and the entry has its own record page", () =
   check(text().indexOf("SES-7003") >= 0 && text().indexOf("Accepted") >= 0, "SES page");
 });
 
+test("Quality can renew a document for a service supplier missing from older saved data", () => {
+  delete w.App.state.docs.keystone;            // as in data saved before the service suppliers existed
+  role("quality"); tab("suppliers");
+  const f = $('form[data-form="docRenew"]');
+  f.elements.supplierId.value = "keystone"; f.elements.docType.value = "quality";
+  f.elements.note.value = "Certificate QC-2207 checked by Quality"; submit(f);
+  check(toastText().indexOf("Renewal recorded") >= 0, "toast: " + toastText());
+});
+
 t.done();

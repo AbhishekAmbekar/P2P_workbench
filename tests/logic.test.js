@@ -682,6 +682,10 @@ test("an expired document blocks an award, and Quality renewing it unblocks it",
   throwsWith(() => P.renewDoc(s, "quality", NOW, "northfield", "subtier", day(300), ""), "what was checked");
   P.renewDoc(s, "quality", NOW, "northfield", "subtier", day(300), "Reviewed new disclosure, ref SD-2291");
   assert.ok(s.audit.some(a => a.action.indexOf("Document renewed") === 0));
+  // Data saved before a supplier existed has no document record for it. Renewal must still work.
+  delete s.docs.keystone;
+  P.renewDoc(s, "quality", NOW, "keystone", "quality", day(300), "Certificate QC-2207 checked");
+  assert.strictEqual(s.docs.keystone.quality, day(300));
   award(s, NOW, x, "northfield", "");
   assert.strictEqual(x.status, "Awarded");
 });
