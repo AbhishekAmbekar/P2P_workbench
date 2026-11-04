@@ -279,60 +279,101 @@ function servicePO() {
   return { s, r, po };
 }
 
-test("the Buyer records service work and the Requester accepts it", () => {
+test("the Requester records service work and the Manager releases a small entry", () => {
   const { s, po } = servicePO();
   const f = { qty: 2, period: "2026-10", note: "Set the vessel on its plinth, 2 days with operator" };
-  throwsWith(() => P.postService(s, "requester", NOW, po.id, f), "cannot do this");
-  throwsWith(() => P.postService(s, "buyer", NOW, po.id, Object.assign({}, f, { period: "" })), "month");
-  throwsWith(() => P.postService(s, "buyer", NOW, po.id, Object.assign({}, f, { note: "" })), "Describe the work");
-  throwsWith(() => P.postService(s, "buyer", NOW, po.id, Object.assign({}, f, { qty: 1.234 })), "two decimals");
-  const e = P.postService(s, "buyer", NOW, po.id, f);
+  throwsWith(() => P.postService(s, "buyer", NOW, po.id, f), "cannot do this");
+  throwsWith(() => P.postService(s, "requester", NOW, po.id, Object.assign({}, f, { period: "" })), "month");
+  throwsWith(() => P.postService(s, "requester", NOW, po.id, Object.assign({}, f, { note: "" })), "Describe the work");
+  throwsWith(() => P.postService(s, "requester", NOW, po.id, Object.assign({}, f, { qty: 1.234 })), "two decimals");
+  const e = P.postService(s, "requester", NOW, po.id, f);
   assert.strictEqual(e.status, "Submitted");
   assert.strictEqual(e.value, 2900);
+  assert.deepStrictEqual(e.releases.map(x => x.role), ["manager"], "under $5,000 the Manager alone releases it");
   assert.strictEqual(P.poStatus(s, po), "In progress");
-  throwsWith(() => P.decideService(s, "buyer", NOW, e.id, "Accepted", ""), "cannot do this");
-  throwsWith(() => P.decideService(s, "requester", NOW, e.id, "Rejected", ""), "what is wrong");
-  P.decideService(s, "requester", NOW, e.id, "Accepted", "");
-  throwsWith(() => P.decideService(s, "requester", NOW, e.id, "Accepted", ""), "already accepted");
+  throwsWith(() => P.decideService(s, "requester", NOW, e.id, "Accepted", ""), "cannot do this");
+  throwsWith(() => P.decideService(s, "director", NOW, e.id, "Accepted", ""), "does not need to release it");
+  throwsWith(() => P.decideService(s, "manager", NOW, e.id, "Rejected", ""), "what is wrong");
+  P.decideService(s, "manager", NOW, e.id, "Accepted", "");
+  assert.strictEqual(e.status, "Accepted");
+  throwsWith(() => P.decideService(s, "manager", NOW, e.id, "Accepted", ""), "already released");
   assert.strictEqual(P.grnTotals(s, po.id).accepted, 2);
+});
+
+test("larger entries go to the Director from $5,000 and the Executive from $10,000, in order", () => {
+  assert.deepStrictEqual(P.serviceChain(4999.99), ["manager"]);
+  assert.deepStrictEqual(P.serviceChain(5000), ["manager", "director"]);
+  assert.deepStrictEqual(P.serviceChain(10000), ["manager", "director", "executive"]);
+  const s = P.newState();
+  const r = baseReq(s, { itemId: "SV-501", qty: 300, estUnit: 68, costCenter: "CC-300 Maintenance" });
+  approveAll(s, r);
+  const po = P.createPO(s, "buyer", NOW, r.id, { leadDays: 3 });
+  const e = P.postService(s, "requester", NOW, po.id, { qty: 160, period: "2026-10", note: "Planned shutdown, timesheets KFS-0907" });
+  assert.strictEqual(e.value, 10560);
+  throwsWith(() => P.decideService(s, "executive", NOW, e.id, "Accepted", ""), "belongs to the Manager");
+  P.decideService(s, "manager", NOW, e.id, "Accepted", "Hours match the shutdown log");
+  assert.strictEqual(P.nextReleaser(e), "director");
+  throwsWith(() => P.decideService(s, "manager", NOW, e.id, "Accepted", ""), "already released this entry");
+  assert.ok(P.queueFor(s, "director", NOW).some(q => q.label === "Service entries waiting for your release" && q.count === 1));
+  P.decideService(s, "director", NOW, e.id, "Accepted", "");
+  assert.strictEqual(e.status, "Submitted", "still waits for the Executive");
+  assert.strictEqual(P.grnTotals(s, po.id).accepted, 0, "nothing is accepted until the last release");
+  P.decideService(s, "executive", NOW, e.id, "Accepted", "");
+  assert.strictEqual(e.status, "Accepted");
+  assert.strictEqual(P.grnTotals(s, po.id).accepted, 160);
+});
+
+test("an approver can send an entry back to the Requester, and old entries get their chain", () => {
+  const { s, po } = servicePO();
+  const e = P.postService(s, "requester", NOW, po.id, { qty: 4, period: "2026-10", note: "Four days of lifts" });
+  P.decideService(s, "manager", NOW, e.id, "Accepted", "");
+  P.decideService(s, "director", NOW, e.id, "Rejected", "Gate log shows three days");
+  assert.strictEqual(e.status, "Rejected");
+  assert.deepStrictEqual(e.releases.map(x => x.status), ["Released", "Sent back"]);
+  assert.ok(P.queueFor(s, "requester", NOW).some(q => q.label === "Service entries sent back to you" && q.count === 1));
+  P.postService(s, "requester", NOW, po.id, { qty: 3, period: "2026-10", note: "Three days, corrected to the gate log" });
+  assert.ok(!P.queueFor(s, "requester", NOW).some(q => q.label === "Service entries sent back to you"), "a corrected entry clears it");
+  const old = { id: "SES-7999", poId: po.id, period: "2026-09", qty: 1, value: 1450, note: "Saved before releases", status: "Submitted" };
+  s.ses.push(old);
+  assert.strictEqual(P.nextReleaser(old), "manager");
 });
 
 test("service entries cannot take a PO past its ordered quantity, and goods receipts are refused", () => {
   const { s, po } = servicePO();
-  P.postService(s, "buyer", NOW, po.id, { qty: 4, period: "2026-10", note: "Four days of lifts" });
-  throwsWith(() => P.postService(s, "buyer", NOW, po.id, { qty: 3, period: "2026-11", note: "Three more days" }), "Only 2 days ($2,900.00) remain");
+  P.postService(s, "requester", NOW, po.id, { qty: 4, period: "2026-10", note: "Four days of lifts" });
+  throwsWith(() => P.postService(s, "requester", NOW, po.id, { qty: 3, period: "2026-11", note: "Three more days" }), "Only 2 days ($2,900.00) remain");
   throwsWith(() => P.postGRN(s, "warehouse", NOW, po.id, { qty: 1, result: "Accepted" }), "is a service PO");
-  const e = P.postService(s, "buyer", NOW, po.id, { qty: 2, period: "2026-11", note: "Two more days" });
-  P.decideService(s, "requester", NOW, e.id, "Rejected", "Only one day was worked, see the gate log");
-  assert.strictEqual(P.serviceStatus(s, po).leftQty, 2, "a rejected entry gives its quantity back");
+  const e = P.postService(s, "requester", NOW, po.id, { qty: 2, period: "2026-11", note: "Two more days" });
+  P.decideService(s, "manager", NOW, e.id, "Rejected", "Only one day was worked, see the gate log");
+  assert.strictEqual(P.serviceStatus(s, po).leftQty, 2, "an entry sent back gives its quantity back");
 });
 
 test("service consumption shows ordered, accepted, waiting and remaining, and warns from 80%", () => {
   const { s, po } = servicePO();
-  const a = P.postService(s, "buyer", NOW, po.id, { qty: 3, period: "2026-09", note: "Three days" });
-  P.decideService(s, "requester", NOW, a.id, "Accepted", "");
-  P.postService(s, "buyer", NOW, po.id, { qty: 1.5, period: "2026-10", note: "One and a half days" });
+  const a = P.postService(s, "requester", NOW, po.id, { qty: 3, period: "2026-09", note: "Three days" });
+  P.decideService(s, "manager", NOW, a.id, "Accepted", "");
+  P.postService(s, "requester", NOW, po.id, { qty: 1.5, period: "2026-10", note: "One and a half days" });
   const st = P.serviceStatus(s, po);
   assert.deepStrictEqual([st.ordered, st.accepted, st.waiting, st.remaining, st.pct, st.warn], [8700, 4350, 2175, 2175, 75, false]);
-  P.postService(s, "buyer", NOW, po.id, { qty: 0.5, period: "2026-10", note: "Half a day more" });
+  P.postService(s, "requester", NOW, po.id, { qty: 0.5, period: "2026-10", note: "Half a day more" });
   assert.strictEqual(P.serviceStatus(s, po).warn, true);
 });
 
-test("a service invoice matches only accepted, not yet invoiced service, and names who must act", () => {
+test("a service invoice matches only released, not yet invoiced service, and names who must act", () => {
   const { s, po } = servicePO();
   const inv = n => P.enterInvoice(s, "ap", NOW, { poId: po.id, invNo: "CL-" + n, qty: 2, unitPrice: 1450, date: day(0) });
   let i = inv(1);
   assert.strictEqual(i.match.issues[0].code, "NO_RECEIPT");
-  assert.strictEqual(i.match.issues[0].owner, "buyer", "nothing recorded: the Buyer records it");
-  const e = P.postService(s, "buyer", NOW, po.id, { qty: 2, period: "2026-10", note: "Two days of lifts" });
+  assert.strictEqual(i.match.issues[0].owner, "requester", "nothing recorded: the Requester records it");
+  const e = P.postService(s, "requester", NOW, po.id, { qty: 2, period: "2026-10", note: "Two days of lifts" });
   i = inv(2);
-  assert.strictEqual(i.match.issues[0].owner, "requester", "recorded but not accepted: the Requester accepts it");
-  assert.ok(P.queueFor(s, "requester", NOW).some(q => q.label === "Invoices waiting on your service acceptance"));
-  P.decideService(s, "requester", NOW, e.id, "Accepted", "");
+  assert.strictEqual(i.match.issues[0].owner, "manager", "recorded but not released: the next releaser acts");
+  assert.ok(P.queueFor(s, "manager", NOW).some(q => q.label === "Invoices waiting on your service release"));
+  P.decideService(s, "manager", NOW, e.id, "Accepted", "");
   P.rerunMatch(s, "ap", NOW, i.id);
   assert.strictEqual(i.status, "Matched");
-  const half = P.postService(s, "buyer", NOW, po.id, { qty: 0.5, period: "2026-11", note: "Half day standby" });
-  P.decideService(s, "requester", NOW, half.id, "Accepted", "");
+  const half = P.postService(s, "requester", NOW, po.id, { qty: 0.5, period: "2026-11", note: "Half day standby" });
+  P.decideService(s, "manager", NOW, half.id, "Accepted", "");
   const h = P.enterInvoice(s, "ap", NOW, { poId: po.id, invNo: "CL-9", qty: 0.5, unitPrice: 1450, date: day(0) });
   assert.strictEqual(h.status, "Matched", "service invoices can bill part of a day");
   throwsWith(() => P.enterInvoice(s, "ap", NOW, { poId: "PO-9999", invNo: "X", qty: 1, unitPrice: 1, date: day(0) }), "not found");
@@ -349,8 +390,9 @@ test("service POs stay out of delivery health and the expedite list", () => {
 
 test("a fully accepted service PO is consumed, and the flow finds it from a service entry", () => {
   const { s, r, po } = servicePO();
-  const e = P.postService(s, "buyer", NOW, po.id, { qty: 6, period: "2026-10", note: "All six days" });
-  P.decideService(s, "requester", NOW, e.id, "Accepted", "");
+  const e = P.postService(s, "requester", NOW, po.id, { qty: 6, period: "2026-10", note: "All six days" });
+  P.decideService(s, "manager", NOW, e.id, "Accepted", "");
+  P.decideService(s, "director", NOW, e.id, "Accepted", "");
   assert.strictEqual(P.poStatus(s, po), "Consumed");
   const f = P.docFlow(s, e.id);
   assert.strictEqual(f.po.id, po.id);
@@ -551,7 +593,7 @@ test("seed builds without breaking any rule and covers every stage", () => {
 test("seed exceptions have the expected owners", () => {
   const s = seed(NOW);
   const owners = s.invoices.filter(i => i.status === "Exception").map(i => P.invOwners(i)[0]).sort();
-  assert.deepStrictEqual(owners, ["buyer", "requester", "warehouse"]);
+  assert.deepStrictEqual(owners, ["buyer", "director", "warehouse"]);
 });
 
 test("queues point each role at its own work", () => {

@@ -22,6 +22,9 @@
     categoryType: { "Raw materials": "Direct", "Components": "Direct", "Packaging": "Direct", "MRO": "Indirect", "Services": "Indirect" },
     // Share of a service PO used up before the screens warn that it is running out.
     serviceWarnPct: 80,
+    // Who releases a service entry. The Manager releases every entry. From these values per entry, the Director
+    // and then the Executive release it too, in order.
+    serviceRelease: { director: 5000, executive: 10000 },
     // Supplier documents. Every supplier needs the first two. Suppliers of these categories also need the third.
     subtierCategories: ["Raw materials", "Components"],
     docTypes: { quality: "Quality certificate", origin: "Origin declaration", subtier: "Sub-tier disclosure" },
@@ -61,12 +64,12 @@
     // This is about focus, not permission: the engine rules decide who can act. Screens in neither list sit under "More screens".
     focus: {
       requester:   { work: ["requests", "rfx", "services"], view: ["pos", "grn", "audit"] },
-      manager:     { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "services", "invoices", "suppliers", "audit"] },
+      manager:     { work: ["requests", "services"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
       quality:     { work: ["requests", "rfx", "grn", "suppliers"], view: ["pos", "audit"] },
       engineering: { work: ["requests", "rfx"], view: ["pos", "audit"] },
-      director:    { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "services", "invoices", "suppliers", "audit"] },
-      executive:   { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "services", "invoices", "suppliers", "audit"] },
-      buyer:       { work: ["rfx", "pos", "expedite", "services", "suppliers", "invoices"], view: ["requests", "grn", "audit"] },
+      director:    { work: ["requests", "rfx", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      executive:   { work: ["requests", "rfx", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      buyer:       { work: ["rfx", "pos", "expedite", "suppliers", "invoices"], view: ["requests", "grn", "services", "audit"] },
       warehouse:   { work: ["grn"], view: ["pos", "invoices", "audit"] },
       ap:          { work: ["invoices"], view: ["pos", "grn", "services", "suppliers", "audit"] }
     },
@@ -77,7 +80,7 @@
       pos: "The Buyer creates POs and keeps supplier dates and prices current.",
       expedite: "The Buyer chases suppliers from here.",
       grn: "Receiving is done by the Warehouse. Quality decides what happens to held goods.",
-      services: "The Buyer records the service work from the supplier's report. The Requester accepts it, the same way a receipt confirms goods.",
+      services: "The Requester records the service work from the site log and the supplier's timesheet. The Manager releases it, plus the Director from $5,000 and the Executive from $10,000.",
       invoices: "Accounts Payable enters, matches and pays invoices here. Price gaps go to the Buyer, receipt gaps to the Warehouse.",
       suppliers: "Quality records document renewals. The Buyer keeps supplier emails."
     },

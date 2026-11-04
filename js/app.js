@@ -37,6 +37,7 @@
 
   App.pill = function (text, kind) { return '<span class="pill ' + (kind || "mut") + '">' + App.esc(text) + "</span>"; };
   var STATUS_KIND = {
+    Released: "ok", "Sent back": "bad", Waiting: "info", "Not yet": "mut",
     "Pending approval": "info", Approved: "ok", Rejected: "bad", Cancelled: "mut", Sourcing: "info", Awarded: "ok", Ordered: "ok",
     Service: "mut", "In progress": "info", Consumed: "ok", Submitted: "info",
     Open: "info", "Technical review": "warn", Evaluating: "warn", "Award pending approval": "info", Pending: "mut", "Not reviewed": "mut",
