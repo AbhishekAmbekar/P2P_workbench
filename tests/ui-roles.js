@@ -46,8 +46,8 @@ test("a role's own screens show no view only line", () => {
 
 test("the VP follows everything and works only on approvals", () => {
   role("executive");
-  check(group("Your work").join() === "requests");
-  check(group("View only").length === 7, "view " + group("View only"));
+  check(group("Your work").join() === "requests,rfx", "work " + group("Your work"));
+  check(group("View only").length === 6, "view " + group("View only"));
   check(!$("#tabs .navmore"), "nothing folded for the VP");
   tab("pos");
   check(band().indexOf("You are working as Executive, so this screen is for reading") >= 0);
@@ -57,9 +57,9 @@ test("the Manager follows every screen like the Director and VP, and gets Oversi
   role("manager");
   check(group("Your work").join() === "requests", "work " + group("Your work"));
   check(group("View only").length === 7, "view " + group("View only"));
-  role("director"); const dir = group("View only").join();
+  role("director"); const dir = group("Your work").concat(group("View only")).sort().join();
   role("manager");
-  check(group("View only").join() === dir, "same as the Director");
+  check(group("Your work").concat(group("View only")).sort().join() === dir, "same screens as the Director");
   check(!$("#tabs .navmore"), "nothing folded");
   tab("dashboard");
   check($("#view h2").textContent === "Oversight", "oversight home");

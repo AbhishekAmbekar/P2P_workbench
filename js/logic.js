@@ -307,10 +307,47 @@
     var x = getRfx(s, rfxId);
     if (x.status !== "Open") fail("Bidding is already closed.");
     if (x.quotes.length < 1) fail("No quotes have been received yet.");
-    x.status = "Evaluating";
-    log(s, now, role, x.id, "Bidding closed", x.quotes.length + " of " + x.invited.length + " invited suppliers quoted");
+    // Next the user side checks each offer against the spec. Engineered items go to Engineering,
+    // items flagged for inspection to Quality, everything else to the Requester who raised the need.
+    var it = item(getReq(s, x.requestId).itemId);
+    x.techRole = techReviewer(it);
+    x.status = "Technical review";
+    log(s, now, role, x.id, "Bidding closed", x.quotes.length + " of " + x.invited.length + " invited suppliers quoted. Sent to " +
+      roleLabel(x.techRole) + " for technical evaluation");
     return x;
   }
+
+  var techReviewer = function (it) { return it.needsEngineering ? "engineering" : it.needsQuality ? "quality" : "requester"; };
+
+  // The technical reviewer marks one quote as acceptable or not against the spec, with a note (the technical recommendation).
+  function techEvaluate(s, role, now, rfxId, supplierId, result, note) {
+    var x = getRfx(s, rfxId);
+    if (x.status !== "Technical review") fail("This RFx is not waiting for a technical evaluation.");
+    need(role, [x.techRole]);
+    var q = x.quotes.find(function (z) { return z.supplierId === supplierId; }) || fail("That supplier has not quoted.");
+    if (result !== "Acceptable" && result !== "Not acceptable") fail("Choose Acceptable or Not acceptable.");
+    var n = (note || "").trim();
+    if (result === "Not acceptable" && n.length < 5) fail("Say why the offer does not meet the spec.");
+    q.tech = { result: result, note: n, by: role, at: now };
+    log(s, now, role, x.id, "Technical evaluation: " + supplier(supplierId).name + " " + result.toLowerCase(), n);
+    return x;
+  }
+
+  // Sends the technical recommendation back to the Buyer. Every quote must be evaluated first.
+  function techSubmit(s, role, now, rfxId) {
+    var x = getRfx(s, rfxId);
+    if (x.status !== "Technical review") fail("This RFx is not waiting for a technical evaluation.");
+    need(role, [x.techRole]);
+    var open = x.quotes.filter(function (q) { return !q.tech; });
+    if (open.length) fail("Evaluate every quote first. Still open: " + open.map(function (q) { return supplier(q.supplierId).name; }).join(", ") + ".");
+    var ok = x.quotes.filter(function (q) { return q.tech.result === "Acceptable"; }).length;
+    x.status = "Evaluating"; x.techDone = { by: role, at: now };
+    log(s, now, role, x.id, "Technical recommendation sent to the Buyer",
+      ok + " of " + x.quotes.length + " offers technically acceptable" + (ok ? "" : ". Nothing can be awarded; the Buyer needs new quotes"));
+    return x;
+  }
+  // Older saved RFx never had a technical review. Their quotes count as acceptable.
+  var techOk = function (x, q) { return !x.techRole || (q.tech && q.tech.result === "Acceptable"); };
 
   // Price is scored on landed cost (price plus tariff plus freight), so a tariff can change the winner.
   // Pass the state and the current time to also check supplier documents and quote expiry.
@@ -332,21 +369,27 @@
         supplierId: z.supplierId, unitPrice: z.unitPrice, tariffPct: z.tariffPct || 0, freight: z.freight || 0, landed: landed[i],
         validUntil: z.validUntil || null, expired: !!(today && z.validUntil && z.validUntil < today),
         leadDays: z.leadDays, terms: z.terms, supplierStatus: sp.status, docIssues: docs,
+        tech: z.tech ? z.tech.result : (x.techRole ? "Pending" : "Not reviewed"), techNote: z.tech ? z.tech.note : "", techOk: techOk(x, z),
         scores: { price: round1(p), lead: round1(l), quality: qs }, total: round1(total),
-        eligible: sp.status !== "Not qualified" && docs.length === 0
+        eligible: sp.status !== "Not qualified" && docs.length === 0 && techOk(x, z)
       };
     }).sort(function (a, b) { return b.total - a.total; });
   }
 
-  function award(s, role, now, rfxId, supplierId, justification) {
+  // The Buyer recommends a supplier. The award only stands once the approval chain signs it off.
+  // Director always (every RFx is at least the RFx threshold). Executive from the executive threshold,
+  // or at any value for a single bid, a conditional supplier, or a pick that is not the top eligible quote.
+  function recommendAward(s, role, now, rfxId, supplierId, justification) {
     need(role, ["buyer"]);
     var x = getRfx(s, rfxId);
+    if (x.status === "Technical review") fail("The technical evaluation is not done yet. It is with the " + roleLabel(x.techRole) + ".");
     if (x.status !== "Evaluating") fail("Close bidding before awarding.");
     var ranked = scoreRFx(x, s, now);
     var pick = ranked.find(function (q) { return q.supplierId === supplierId; });
     if (!pick) fail("That supplier has not quoted.");
     var sp = supplier(supplierId);
     if (sp.status === "Not qualified") fail(sp.name + " is not qualified, so it cannot receive an award. Choose another supplier.");
+    if (!pick.techOk) fail("The offer from " + sp.name + " is not technically acceptable" + (pick.techNote ? ": " + pick.techNote : "") + ".");
     if (pick.docIssues.length) {
       fail(sp.name + " cannot receive an award: " + pick.docIssues.map(docText).join(", ") + ". Quality must record the renewal first.");
     }
@@ -358,10 +401,41 @@
     if (eligible[0].supplierId !== supplierId) reasons.push("not the top scored eligible quote");
     var j = (justification || "").trim();
     if (reasons.length && j.length < 10) fail("A written justification is required (" + reasons.join(", ") + ").");
-    x.award = { supplierId: supplierId, justification: j, by: role, at: now };
-    x.status = "Awarded";
-    getReq(s, x.requestId).status = "Awarded";
-    log(s, now, role, x.id, "Awarded to " + sp.name, j || "Top scored eligible quote");
+    var r = getReq(s, x.requestId), value = cents(r.qty * pick.landed) / 100;
+    var chain = ["director"];
+    if (value >= TH.executive || reasons.length) chain.push("executive");
+    x.recommendation = { supplierId: supplierId, justification: j, reasons: reasons, value: value, by: role, at: now };
+    x.awardApprovals = chain.map(function (rl) { return { role: rl, status: "Pending", at: null, comment: "" }; });
+    x.status = "Award pending approval";
+    log(s, now, role, x.id, "Award recommended: " + sp.name + " for " + fmt(value),
+      (j || "Top scored eligible quote") + ". Approval chain: " + chain.map(roleLabel).join(" then ") +
+      (reasons.length ? ". Escalated for: " + reasons.join(", ") : ""));
+    return x;
+  }
+
+  function decideAward(s, role, now, rfxId, decision, comment) {
+    var x = getRfx(s, rfxId);
+    if (x.status !== "Award pending approval") fail("This RFx has no award waiting for approval.");
+    var step = x.awardApprovals.find(function (a) { return a.status === "Pending"; });
+    if (step.role !== role) fail("The next award approval belongs to the " + roleLabel(step.role) + ", not the " + roleLabel(role) + ".");
+    if (decision !== "Approved" && decision !== "Rejected") fail("Decision must be Approved or Rejected.");
+    var c = (comment || "").trim();
+    if (decision === "Rejected" && c.length < 5) fail("Add a reason when rejecting the award.");
+    step.status = decision; step.at = now; step.comment = c;
+    var rec = x.recommendation, sp = supplier(rec.supplierId);
+    if (decision === "Rejected") {
+      // Back to the Buyer to pick again. The rejected recommendation stays on record.
+      x.pastRecommendations = (x.pastRecommendations || []).concat([{ rec: rec, approvals: x.awardApprovals }]);
+      x.recommendation = null; x.awardApprovals = null; x.status = "Evaluating";
+      log(s, now, role, x.id, "Award to " + sp.name + " rejected at " + roleLabel(role) + " step", c);
+    } else if (!x.awardApprovals.some(function (a) { return a.status === "Pending"; })) {
+      x.award = { supplierId: rec.supplierId, justification: rec.justification, by: rec.by, at: now, approvals: x.awardApprovals };
+      x.status = "Awarded";
+      getReq(s, x.requestId).status = "Awarded";
+      log(s, now, role, x.id, "Award approved. Awarded to " + sp.name, c || "Final approval");
+    } else {
+      log(s, now, role, x.id, "Award approved at " + roleLabel(role) + " step", c);
+    }
     return x;
   }
 
@@ -802,6 +876,13 @@
       var st = r.approvals.find(function (a) { return a.status === "Pending"; });
       return r.status === "Pending approval" && st && st.role === role;
     }).length, "requests");
+    add("RFx waiting for your technical evaluation", s.rfx.filter(function (x) {
+      return x.status === "Technical review" && x.techRole === role;
+    }).length, "rfx");
+    add("Awards waiting for your approval", s.rfx.filter(function (x) {
+      var st = x.status === "Award pending approval" && x.awardApprovals.find(function (a) { return a.status === "Pending"; });
+      return st && st.role === role;
+    }).length, "rfx");
     var openPOs = s.pos.filter(function (po) { return ["Issued", "Confirmed", "Partially received"].indexOf(poStatus(s, po)) >= 0; });
     var invFor = function (who) { return s.invoices.filter(function (i) { return invOwners(i).indexOf(who) >= 0; }).length; };
     if (role === "requester") {
@@ -818,7 +899,8 @@
       add("Approved PRs waiting for sourcing", s.requests.filter(function (r) { return r.status === "Approved"; }).length, "requests");
       add("Awarded RFx waiting for a PO", s.requests.filter(function (r) { return r.status === "Awarded"; }).length, "requests");
       add("RFx open for quotes", s.rfx.filter(function (x) { return x.status === "Open"; }).length, "rfx");
-      add("RFx ready to award", s.rfx.filter(function (x) { return x.status === "Evaluating"; }).length, "rfx");
+      add("RFx in technical review", s.rfx.filter(function (x) { return x.status === "Technical review"; }).length, "rfx");
+      add("RFx ready for your award recommendation", s.rfx.filter(function (x) { return x.status === "Evaluating"; }).length, "rfx");
       add("POs not yet confirmed by supplier", s.pos.filter(function (po) { return poStatus(s, po) === "Issued"; }).length, "pos");
       add("POs to chase with the supplier", expediteList(s, now || new Date().toISOString()).length, "expedite");
       add("Invoice price exceptions", invFor("buyer"), "invoices");
@@ -878,7 +960,8 @@
     REF: REF, fmt: fmt, addDays: addDays, dateOf: dateOf, daysBetween: daysBetween, roleLabel: roleLabel,
     newState: newState, requestTotal: requestTotal, poTotal: poTotal, buildChain: buildChain,
     createRequest: createRequest, cancelRequest: cancelRequest, decide: decide,
-    startRFx: startRFx, addQuote: addQuote, closeBidding: closeBidding, scoreRFx: scoreRFx, award: award,
+    startRFx: startRFx, addQuote: addQuote, closeBidding: closeBidding, scoreRFx: scoreRFx,
+    techEvaluate: techEvaluate, techSubmit: techSubmit, recommendAward: recommendAward, decideAward: decideAward, techReviewer: techReviewer,
     createPO: createPO, confirmPO: confirmPO, updatePromise: updatePromise, amendPOPrice: amendPOPrice,
     grnTotals: grnTotals, postGRN: postGRN, releaseHold: releaseHold,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,

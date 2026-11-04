@@ -57,12 +57,12 @@
     // What each role works on, and what it follows along with. Used for the sidebar groups and the "View only" line.
     // This is about focus, not permission: the engine rules decide who can act. Screens in neither list sit under "More screens".
     focus: {
-      requester:   { work: ["requests"], view: ["pos", "grn", "audit"] },
+      requester:   { work: ["requests", "rfx"], view: ["pos", "grn", "audit"] },
       manager:     { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      quality:     { work: ["requests", "grn", "suppliers"], view: ["rfx", "pos", "audit"] },
-      engineering: { work: ["requests"], view: ["rfx", "pos", "audit"] },
-      director:    { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      executive:   { work: ["requests"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      quality:     { work: ["requests", "rfx", "grn", "suppliers"], view: ["pos", "audit"] },
+      engineering: { work: ["requests", "rfx"], view: ["pos", "audit"] },
+      director:    { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      executive:   { work: ["requests", "rfx"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
       buyer:       { work: ["rfx", "pos", "expedite", "suppliers", "invoices"], view: ["requests", "grn", "audit"] },
       warehouse:   { work: ["grn"], view: ["pos", "invoices", "audit"] },
       ap:          { work: ["invoices"], view: ["pos", "grn", "suppliers", "audit"] }
@@ -70,7 +70,7 @@
     // Who works on each screen, shown to roles that only view it.
     screenOwners: {
       requests: "The Requester raises requests here. Approvers decide on them in order.",
-      rfx: "The Buyer runs sourcing here: invites, quotes and the award.",
+      rfx: "The Buyer runs sourcing here. The user side checks offers against the spec, and the Director approves awards.",
       pos: "The Buyer creates POs and keeps supplier dates and prices current.",
       expedite: "The Buyer chases suppliers from here.",
       grn: "Receiving is done by the Warehouse. Quality decides what happens to held goods.",

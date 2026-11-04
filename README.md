@@ -14,7 +14,7 @@ Switch between nine roles to play each person in the chain. A record created in 
 |---|---|---|
 | Request | A requester asks for an item | Approval route set by value, item type and budget |
 | PR | Issued after the last approval | Approvals must happen in order by the right role |
-| RFx | Invite suppliers, collect quotes, score on landed cost, award | Two bidders or a sole source reason. Unqualified suppliers and suppliers with expired documents cannot win. Expired quotes cannot be awarded. Off ranking awards need a written reason |
+| RFx | Invite suppliers, collect quotes, technical evaluation by the user side, score acceptable offers on landed cost, Buyer recommends, leadership approves | Two bidders or a sole source reason. Offers that fail the technical check, unqualified suppliers and suppliers with expired documents cannot win. Expired quotes cannot be awarded. Off ranking awards need a written reason. Director approves every award; the Executive too from $50,000 or for a single bid, a conditional supplier or an off ranking pick |
 | PO | Issue from an award, a contract or a direct buy | RFx required at $10,000 or more with no contract. PO capped at 10% over the approved value. A price more than 10% above the contract or standard price needs a reason |
 | GRN | Warehouse posts accepted, rejected or held goods | No over receipt. Held goods wait for Quality |
 | Invoice | Exact three way match against PO and receipts | Price and quantity must agree. Duplicates are caught. Each gap goes to a named fix owner |
@@ -27,6 +27,7 @@ Approval route: Manager always. Quality for items flagged for inspection. Engine
 
 - **Budget by cost center.** Paid, ordered, requested and remaining for each, on the dashboard. Going over budget adds the Executive.
 - **Spend by category.** All four categories always shown, with committed spend (issued POs) and pipeline (requests not yet ordered) side by side.
+- **Technical evaluation and award approval.** When bidding closes, the user side checks each offer against the spec before purchase compares prices: Engineering for engineered components, Quality for items flagged for inspection, the Requester for everything else. The reviewer marks each offer acceptable or not, with a reason when it fails, and does not see prices. This replaces asking for a technical recommendation by email. The Buyer then recommends a supplier among the acceptable offers, and the award goes for approval: the Director always, plus the Executive from $50,000 or for a single bid, a conditional supplier or a pick that is not the top acceptable offer. A rejection goes back to the Buyer with the reason. The Manager approves the request, not the award.
 - **Landed cost.** Quotes carry a tariff percentage and freight per unit. Ranking uses landed cost, so a tariff can change the winner.
 - **Quote validity.** Quotes expire. An expired quote must be revalidated before an award or PO.
 - **Supplier documents.** Quality certificate, origin declaration and (for raw materials and components) a sub tier disclosure, each with an expiry date. Expired or missing documents block awards and POs until Quality records a renewal on the Suppliers tab.
@@ -87,7 +88,7 @@ Plain HTML, CSS and JavaScript. No framework and no dependencies. The Inter font
 node tests/logic.test.js
 ```
 
-runs 49 checks on the workflow engine, and
+runs 56 checks on the workflow engine, and
 
 ```
 node tests/csv.test.js

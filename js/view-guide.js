@@ -20,7 +20,7 @@
         list([
           "<b>Request.</b> A requester asks for an item with a quantity, price estimate, need by date, site, cost center and reason. The approval route is worked out from the value and the item.",
           "<b>PR.</b> After the last approval the request becomes a numbered purchase requisition. Until then it is only a request.",
-          "<b>RFx.</b> The Buyer invites suppliers, records quotes and ranks them on a weighted score of price, lead time and supplier quality, then awards.",
+          "<b>RFx.</b> The Buyer invites suppliers and records quotes. When bidding closes, the user side checks each offer against the spec: Engineering for engineered components, Quality for items flagged for inspection, the Requester for everything else. The Buyer then ranks the acceptable offers on a weighted score of landed price, lead time and supplier quality, and recommends one. The Director approves the award, and the Executive too for large or risky awards.",
           "<b>PO.</b> The Buyer issues the purchase order from the award, from a contract, or as a direct buy. Then the Buyer confirms the supplier date and manages changes.",
           "<b>GRN.</b> The Warehouse posts what arrived: accepted, rejected or on quality hold. Quality decides what happens to held goods.",
           "<b>Invoice.</b> Accounts Payable enters the supplier invoice. The system matches it exactly against the PO and the accepted receipts. Matches can be paid. Gaps go to the person who can fix them."
@@ -31,7 +31,9 @@
             money(T.director).replace(/\.00$/, "") + " or more adds the Director. " + money(T.executive).replace(/\.00$/, "") + " or more adds the Executive. Approvals happen in order.",
           "<b>When an RFx is required.</b> A request of " + money(T.rfx).replace(/\.00$/, "") + " or more with no contract has to go through an RFx. Items with a contract can be ordered directly at any value.",
           "<b>Inviting suppliers.</b> Only suppliers that sell the item's category can be invited. Invite at least two, or give a written sole source reason.",
-          "<b>Awarding.</b> A supplier that is not qualified cannot receive an award. A conditional supplier, a single bid, or a pick that is not the top score needs a written justification.",
+          "<b>Technical evaluation.</b> Each offer is marked acceptable or not against the spec, with a reason when it fails. The reviewer does not see prices. An offer that fails cannot be recommended, however good its price.",
+          "<b>Awarding.</b> The Buyer recommends. A supplier that is not qualified cannot be recommended. A conditional supplier, a single bid, or a pick that is not the top acceptable offer needs a written justification. The Director approves every award. The Executive also approves from " +
+            money(T.executive).replace(/\.00$/, "") + ", or for any of those risky picks. A rejected award goes back to the Buyer with the reason. No PO until the award is approved.",
           "<b>Direct buys.</b> Only qualified suppliers. A PO cannot run more than " + Math.round(T.poOverrun * 100) + "% over the approved PR value. Past that the request has to be revised and approved again.",
           "<b>Receiving.</b> You cannot receive more than is open on the PO. Rejected units are recorded but do not use up the open quantity. Held units count as received until Quality decides.",
           "<b>Exact match.</b> Quantity must equal what is accepted and not yet invoiced. Price must equal the PO price to the cent. A repeated invoice number from the same supplier is flagged as a duplicate.",
@@ -76,7 +78,8 @@
       section("Try this walk through",
         '<ol style="margin:6px 0;padding-left:20px"><li>Act as <b>Requester</b>, raise a request for the Motor control board with a quantity of 100. Watch the preview add Engineering, Director and Executive.</li>' +
         "<li>Act as each approver in order until a PR number appears.</li>" +
-        "<li>Act as <b>Buyer</b>. The value is over the RFx limit, so start an RFx, invite three suppliers and record quotes. Close bidding, compare, and award.</li>" +
+        "<li>Act as <b>Buyer</b>. The value is over the RFx limit, so start an RFx, invite three suppliers and record quotes. Close bidding.</li>" +
+        "<li>Act as <b>Engineering</b> and mark each offer acceptable or not, then send it to the Buyer. Back as <b>Buyer</b>, compare and recommend. Then act as the <b>Director</b> and the <b>Executive</b> to approve the award.</li>" +
         "<li>Still as Buyer, create the PO, then record the supplier confirmation.</li>" +
         "<li>Act as <b>Warehouse</b> and receive part of the order, then the rest. Try receiving more than is open.</li>" +
         "<li>Act as <b>Accounts Payable</b>. Enter an invoice with a price one cent off and read the exception. Then enter a clean one and pay it.</li></ol>") +

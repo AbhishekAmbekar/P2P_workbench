@@ -1,4 +1,5 @@
-/* RFx: start sourcing for an approved PR, collect quotes, compare on a weighted score, award.
+/* RFx: start sourcing for an approved PR, collect quotes, technical evaluation by the user side,
+ * compare acceptable offers on a weighted score, the Buyer recommends, the Director (and Executive) approve.
  * App.sel.rfx holds the selected RFx id. App.sel.rfxNew holds the request id being sourced. */
 (function () {
   "use strict";
@@ -72,8 +73,22 @@
   };
   App.actions.rfxAward = function (el) {
     var id = el.dataset.id, sup = el.dataset.sup, n = document.getElementById("awardNote");
-    App.run(function (s, role, now) { return P.award(s, role, now, id, sup, n ? n.value : ""); },
-      function () { return "Awarded to " + App.supplier(sup).name + ". The Buyer can now create the PO."; });
+    App.run(function (s, role, now) { return P.recommendAward(s, role, now, id, sup, n ? n.value : ""); },
+      function (x) { return "Award to " + App.supplier(sup).name + " sent for approval: " + x.awardApprovals.map(function (a) { return P.roleLabel(a.role); }).join(", then ") + "."; });
+  };
+  App.actions.rfxTech = function (data, form) {
+    var id = form.dataset.id, sup = form.dataset.sup;
+    App.run(function (s, role, now) { return P.techEvaluate(s, role, now, id, sup, data.result, data.note); },
+      App.supplier(sup).name + " marked " + String(data.result).toLowerCase() + ".");
+  };
+  App.actions.rfxTechSubmit = function (el) {
+    var id = el.dataset.id;
+    App.run(function (s, role, now) { return P.techSubmit(s, role, now, id); }, "Technical recommendation sent to the Buyer.");
+  };
+  App.actions.rfxDecide = function (el) {
+    var id = el.dataset.id, d = el.dataset.decision, n = document.getElementById("awardDecisionNote");
+    App.run(function (s, role, now) { return P.decideAward(s, role, now, id, d, n ? n.value : ""); },
+      function (x) { return d === "Rejected" ? "Award rejected. It is back with the Buyer." : x.status === "Awarded" ? "Award approved. The Buyer can now create the PO." : "Approved. Next: " + P.roleLabel(x.awardApprovals.find(function (a) { return a.status === "Pending"; }).role) + "."; });
   };
   App.actions.rfxSelect = function (el) { App.sel.rfx = el.dataset.id; App.sel.rfxNew = null; App.render(); };
 
@@ -97,26 +112,32 @@
   function compareTable(x, canAward) {
     var ranked = P.scoreRFx(x, App.state, App.now()), r = reqOf(x);
     var top = ranked.filter(function (q) { return q.eligible; })[0];
-    var head = "<tr><th>Rank</th><th>Supplier</th><th>Status</th><th class=\"num\">Unit price</th><th class=\"num\">Landed</th><th class=\"num\">Landed total</th><th class=\"num\">Lead</th><th>Valid until</th>" +
-      '<th class="num">Price pts</th><th class="num">Lead pts</th><th class="num">Quality pts</th><th class="num">Score</th><th></th></tr>';
+    var head = "<tr><th>#</th><th>Supplier</th><th>Technical</th><th class=\"num\">Landed unit</th><th class=\"num\">Landed total</th><th class=\"num\">Lead</th><th>Valid until</th>" +
+      '<th class="num">Score</th><th></th></tr>';
     var rows = ranked.map(function (q, i) {
       var sp = App.supplier(q.supplierId), won = x.award && x.award.supplierId === q.supplierId;
+      var picked = !won && x.recommendation && x.recommendation.supplierId === q.supplierId;
+      var tech = q.tech === "Acceptable" ? App.pill("Acceptable", "ok") : q.tech === "Not acceptable" ? App.pill("Not acceptable", "bad") :
+        q.tech === "Pending" ? App.pill("Pending", "mut") : '<span class="muted">Not reviewed</span>';
+      if (q.techNote) tech += '<div class="hint">' + esc(q.techNote) + "</div>";
       var cell = "";
       if (won) cell = App.pill("Awarded", "ok");
+      else if (picked) cell = App.pill("Recommended", "info");
       else if (canAward) {
-        if (q.supplierStatus === "Not qualified") cell = App.pill("Cannot award", "bad");
+        if (!q.techOk) cell = App.pill("Fails spec", "bad");
+        else if (q.supplierStatus === "Not qualified") cell = App.pill("Cannot award", "bad");
         else if (q.docIssues.length) cell = App.pill("Documents expired", "bad");
         else if (q.expired) cell = App.pill("Quote expired", "bad");
-        else cell = '<button class="small" data-act="rfxAward" data-id="' + x.id + '" data-sup="' + q.supplierId + '">Award</button>';
+        else cell = '<button class="small" data-act="rfxAward" data-id="' + x.id + '" data-sup="' + q.supplierId + '">Recommend</button>';
       }
-      return "<tr" + (won ? ' class="sel"' : "") + "><td>" + (i + 1) + "</td><td>" + esc(sp.name) + "</td><td>" + App.status(q.supplierStatus) +
-        '</td><td class="num">' + App.money(q.unitPrice) + '</td><td class="num">' + App.money(q.landed) +
+      return "<tr" + (won ? ' class="sel"' : "") + "><td>" + (i + 1) + "</td><td>" + esc(sp.name) + '<div style="margin-top:3px">' + App.status(q.supplierStatus) + "</div></td><td>" + tech +
+        '</td><td class="num">' + App.money(q.landed) + (q.landed !== q.unitPrice ? '<div class="hint">price ' + App.money(q.unitPrice) + "</div>" : "") +
         (q.tariffPct || q.freight ? '<div class="hint">' + q.tariffPct + "% tariff" + (q.freight ? ", " + App.money(q.freight) + " freight" : "") + "</div>" : "") +
         '</td><td class="num">' + App.money(q.landed * r.qty) + '</td><td class="num">' + q.leadDays + " d</td><td>" + esc(q.validUntil || "") + (q.expired ? " " + App.pill("expired", "bad") : "") + "</td>" +
-        '<td class="num">' + q.scores.price + '</td><td class="num">' + q.scores.lead + '</td><td class="num">' + q.scores.quality + '</td><td class="num"><b>' + q.total + "</b></td><td>" + cell + "</td></tr>";
+        '<td class="num"><b>' + q.total + '</b><div class="hint nw" data-tip="Points out of 100 for price, lead time and supplier quality">' + q.scores.price + " / " + q.scores.lead + " / " + q.scores.quality + "</div></td><td>" + cell + "</td></tr>";
     }).join("");
     return '<div class="wrap"><table>' + head + rows + "</table></div>" +
-      '<p class="hint">Scores run 0 to 100. Price points use landed cost, which is price plus tariff plus freight per unit, so a tariff can change the winner. Lead time is scored against the fastest quote. Quality is the supplier rating. Weights: price ' +
+      '<p class="hint">Scores run 0 to 100. Under each score are its points for price, lead time and quality. Price points use landed cost, which is price plus tariff plus freight per unit, so a tariff can change the winner. Lead time is scored against the fastest quote. Quality is the supplier rating. Weights: price ' +
       x.weights.price + ", lead time " + x.weights.lead + ", quality " + x.weights.quality + "." +
       (top ? " Top eligible quote: " + esc(App.supplier(top.supplierId).name) + "." : "") + "</p>" +
       (ranked.some(function (q) { return q.docIssues.length; }) ? '<div class="note warn">' + ranked.filter(function (q) { return q.docIssues.length; }).map(function (q) {
@@ -133,6 +154,47 @@
       '<label>New valid until<input type="date" name="newDate" value="' + P.addDays(App.today(), 30) + '"></label>' +
       '<label class="wide">How the supplier confirmed<input name="note" placeholder="Email, call or portal message"></label>' +
       '<div class="wide actions"><button type="submit" class="ghost">Revalidate</button></div></form>';
+  }
+
+  // The technical reviewer marks each offer against the spec, then sends the recommendation to the Buyer.
+  function techPanel(x) {
+    var mine = App.role === x.techRole, who = P.roleLabel(x.techRole);
+    var h = '<div class="note">Technical evaluation by ' + esc(who) + ". Each offer is checked against the spec before the Buyer compares prices. " +
+      "Only offers marked acceptable can be recommended." + (mine ? " Prices are kept out of this view, so the check is on the spec alone." : "") + "</div>";
+    if (!mine) return h + '<div class="note">Waiting for the ' + esc(who) + ". Switch roles at the top to do the evaluation.</div>";
+    h += '<div class="wrap"><table><tr><th>Supplier</th><th>Offer</th><th>Result</th><th>Note for the Buyer</th><th></th></tr>' + x.quotes.map(function (q) {
+      var t = q.tech || {};
+      return '<tr><td>' + esc(App.supplier(q.supplierId).name) + "</td><td>" + q.leadDays + " days lead time" + (q.terms ? ", " + esc(q.terms) : "") + "</td>" +
+        '<td colspan="3"><form data-form="rfxTech" data-id="' + x.id + '" data-sup="' + q.supplierId + '" class="techrow">' +
+        '<select name="result"><option' + (t.result === "Acceptable" ? " selected" : "") + ">Acceptable</option><option" + (t.result === "Not acceptable" ? " selected" : "") + ">Not acceptable</option></select>" +
+        '<input name="note" value="' + esc(t.note || "") + '" placeholder="Needed if not acceptable: what does not meet the spec">' +
+        '<button type="submit" class="small' + (t.result ? " ghost" : "") + '">' + (t.result ? "Update" : "Save") + "</button>" +
+        (t.result ? " " + App.pill(t.result, t.result === "Acceptable" ? "ok" : "bad") : "") + "</form></td></tr>";
+    }).join("") + "</table></div>";
+    var left = x.quotes.filter(function (q) { return !q.tech; }).length;
+    return h + '<div class="actions"><button data-act="rfxTechSubmit" data-id="' + x.id + '"' + (left ? " disabled" : "") + ">Send to the Buyer</button>" +
+      (left ? '<span class="hint">' + left + " offer" + (left === 1 ? "" : "s") + " still to evaluate.</span>" : "") + "</div>";
+  }
+
+  function chainPills(list, live) {
+    return '<div class="chain">' + list.map(function (a, i) {
+      var cur = live && list.find(function (z) { return z.status === "Pending"; }) === a;
+      return App.pill((i + 1) + ". " + P.roleLabel(a.role) + ": " + (cur ? "waiting" : a.status.toLowerCase()), cur ? "info" : a.status === "Approved" ? "ok" : a.status === "Rejected" ? "bad" : "mut");
+    }).join(" ") + "</div>";
+  }
+
+  // The Buyer's recommendation, the approval chain, and the decision buttons for the approver whose turn it is.
+  function approvalPanel(x) {
+    var rec = x.recommendation, sp = App.supplier(rec.supplierId), step = x.awardApprovals.find(function (a) { return a.status === "Pending"; });
+    var h = '<div class="note"><b>Recommended: ' + esc(sp.name) + "</b> for " + App.money(rec.value) + " landed. " +
+      (rec.justification ? "Reason: " + esc(rec.justification) + ". " : "Top scored acceptable offer. ") +
+      (rec.reasons.length ? "Escalated to the Executive for: " + esc(rec.reasons.join(", ")) + "." : "") + "</div>" + chainPills(x.awardApprovals, true);
+    if (App.role === step.role) {
+      h += '<label class="hint" style="display:block;margin-top:10px">Comment (needed to reject)</label><textarea id="awardDecisionNote"></textarea>' +
+        '<div class="actions"><button data-act="rfxDecide" data-decision="Approved" data-id="' + x.id + '">Approve award</button>' +
+        '<button class="danger" data-act="rfxDecide" data-decision="Rejected" data-id="' + x.id + '">Reject, back to the Buyer</button></div>';
+    } else h += '<div class="note">Waiting for the ' + esc(P.roleLabel(step.role)) + ". Switch roles at the top to decide.</div>";
+    return h;
   }
 
   function detail(x) {
@@ -152,16 +214,28 @@
         h += quoteForm(x) + '<div class="actions"><button class="ghost" data-act="rfxClose" data-id="' + x.id + '"' +
           (x.quotes.length ? "" : " disabled") + ">Close bidding and compare</button></div>";
       } else h += '<div class="note">Quotes are entered by the Buyer. Switch roles to continue.</div>';
+    } else if (x.status === "Technical review") {
+      // The reviewer judges the spec only, so prices stay out of their view, as in a two part bid. Everyone else sees the comparison.
+      h += (App.role === x.techRole ? "" : compareTable(x, false)) + techPanel(x);
     } else if (x.status === "Evaluating") {
+      var last = (x.pastRecommendations || []).slice(-1)[0];
+      if (last) {
+        var no = last.approvals.find(function (a) { return a.status === "Rejected"; });
+        h += '<div class="note warn">The award to ' + esc(App.supplier(last.rec.supplierId).name) + " was rejected by the " + esc(P.roleLabel(no.role)) + ": " + esc(no.comment) + "</div>";
+      }
       h += compareTable(x, buyer) + revalidateForm(x);
       if (buyer) {
-        h += '<label class="hint" style="display:block;margin-top:10px">Justification (required for a conditional supplier, a single bid, or when not picking the top score)</label>' +
-          '<textarea id="awardNote"></textarea>';
-      } else h += '<div class="note">Awarding is done by the Buyer.</div>';
+        h += '<label class="hint" style="display:block;margin-top:10px">Justification (required for a conditional supplier, a single bid, or when not picking the top acceptable offer. Any of these also sends the award to the Executive.)</label>' +
+          '<textarea id="awardNote"></textarea>' +
+          '<p class="hint">Recommend sends the award for approval: the Director, plus the Executive from ' + App.money(REF.thresholds.executive).replace(/\.00$/, "") + ".</p>";
+      } else h += '<div class="note">The Buyer recommends the award. Then the Director, and for large or risky awards the Executive, approve it.</div>';
+    } else if (x.status === "Award pending approval") {
+      h += compareTable(x, false) + approvalPanel(x);
     } else {
       h += compareTable(x, false) + revalidateForm(x);
       var a = x.award;
-      h += '<div class="note">Awarded to <b>' + esc(App.supplier(a.supplierId).name) + "</b>." + (a.justification ? " Justification: " + esc(a.justification) : "") + "</div>";
+      h += '<div class="note">Awarded to <b>' + esc(App.supplier(a.supplierId).name) + "</b>." + (a.justification ? " Justification: " + esc(a.justification) : "") + "</div>" +
+        (a.approvals ? chainPills(a.approvals, false) : "");
       if (r.status === "Awarded") h += '<div class="actions"><button class="ghost" data-act="goto" data-arg="pos" data-id="' + r.id + '">Create the PO</button></div>';
       if (r.poId) h += '<div class="actions"><button class="ghost" data-act="goto" data-arg="pos" data-id="' + r.poId + '">View the PO</button></div>';
     }

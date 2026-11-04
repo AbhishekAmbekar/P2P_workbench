@@ -42,7 +42,7 @@ test("3. buyer cannot order directly because the value needs an RFx", () => {
   check(r.textContent.indexOf("Needs RFx") >= 0, "route should say Needs RFx");
 });
 
-test("4. buyer runs the RFx: invite, quote, close, award", () => {
+test("4. buyer runs the RFx: invite, quote, close; Engineering checks the spec; Director and VP approve the award", () => {
   tab("rfx");
   const r = [...$$("#view table")[0].querySelectorAll("tr")].find(x => x.textContent.indexOf(prNo) >= 0);
   click(r.querySelector("button"));
@@ -52,6 +52,12 @@ test("4. buyer runs the RFx: invite, quote, close, award", () => {
   const q = (sup, price, lead) => { fill($('form[data-form="rfxQuote"]'), { supplierId: sup, unitPrice: price, leadDays: lead }); submit($('form[data-form="rfxQuote"]')); };
   q("brightpath", "628", "21"); q("helio", "615", "30"); q("pinecrest", "600", "35");
   click(btn("Close bidding and compare"));
+  check(text().indexOf("Technical evaluation by Engineering") >= 0, "engineered item goes to Engineering");
+  role("engineering"); tab("rfx"); click($('#view tr[data-id="' + rfxId + '"]'));
+  check(text().indexOf("$628") < 0, "the technical reviewer does not see prices");
+  $$('form[data-form="rfxTech"]').forEach((f, i) => { const form = $$('form[data-form="rfxTech"]')[i]; form.elements.result.value = "Acceptable"; submit(form); });
+  click(btn("Send to the Buyer"));
+  role("buyer"); tab("rfx"); click($('#view tr[data-id="' + rfxId + '"]'));
   check($$('#view button[data-act="rfxAward"]').length === 3);
   const top = $$("#view table")[1] ? $$("#view table tr") : [];
   const first = [...$$("#view table")].map(x => x).pop().querySelectorAll("tr")[1];
@@ -59,7 +65,13 @@ test("4. buyer runs the RFx: invite, quote, close, award", () => {
   const needsNote = /Conditional/.test(first.textContent);
   if (needsNote) $("#awardNote").value = "Best overall score, extra incoming inspection planned";
   click(first.querySelector('button[data-act="rfxAward"]'));
-  check(toastText().indexOf("Awarded to") >= 0, "toast: " + toastText());
+  check(toastText().indexOf("sent for approval: Director, then Executive") >= 0, "a $60,000+ award goes to both: " + toastText());
+  ["director", "executive"].forEach(r => {
+    role(r); tab("rfx"); click($('#view tr[data-id="' + rfxId + '"]'));
+    click(btn("Approve award"));
+  });
+  check(toastText().indexOf("Award approved") >= 0, "toast: " + toastText());
+  role("buyer");
 });
 
 test("5. buyer issues the PO from the award and confirms the date", () => {
