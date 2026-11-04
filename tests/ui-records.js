@@ -8,10 +8,10 @@ const flowIds = () => $$("#view .fstep b").map(b => b.textContent);
 click($("#resetBtn"));
 role("buyer");
 
-test("the sidebar groups the sections by stage and keeps all ten", () => {
+test("the sidebar keeps all ten sections, grouped for the role", () => {
   const groups = $$("#tabs .navgrp").map(g => g.textContent);
-  check(groups.join(",") === "Request,Source,Order,Receive and pay,Records,Help", "groups " + groups);
-  check($$("#tabs button").length === 10, "ten sections");
+  check(groups.join(",") === "Your work,View only,Help", "groups " + groups);
+  check($$('#tabs button[data-act="tab"]').length === 10, "ten sections");
 });
 
 test("a PO opens as a full page with facts, document flow and sections", () => {
@@ -83,7 +83,7 @@ test("a link in the address opens the screen or record", () => {
 });
 
 test("record numbers in every table are links to the record page", () => {
-  [["requester", "requests", "REQ-1012"], ["buyer", "rfx", "RFX-3003"], ["buyer", "pos", "PO-4006"], ["buyer", "expedite", "PO-4006"],
+  [["requester", "requests", "REQ-1014"], ["buyer", "rfx", "RFX-3003"], ["buyer", "pos", "PO-4006"], ["buyer", "expedite", "PO-4006"],
    ["warehouse", "grn", "PO-4006"], ["ap", "invoices", "INV-6001"], ["buyer", "audit", "PO-4007"]].forEach(([r, tb, id]) => {
     role(r); tab(tb);
     const a = $('#view td a.rec[data-id="' + id + '"]');

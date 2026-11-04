@@ -46,6 +46,10 @@
         "<p>For every open PO, slack is the need by date minus the supplier promise date. Under 5 days is At Risk. Below zero is Late. Move a promise date on the PO screen to see the status change.</p>") +
       section("Expedite and email drafts",
         "<p>The Expedite tab lists open POs that need a nudge, worst first: overdue, late, at risk, then not confirmed. As the Buyer, pick one and the app writes a short chase message from the PO record. You can edit it, then open it in your own mail program, Gmail or Outlook, copy it, or download it as a draft file. The app never sends mail itself and cannot tell whether you sent it, so the audit trail records only that a draft was opened. Demo suppliers have no email address, so type one in and the app can remember it for that supplier.</p>") +
+      section("Your work and view only",
+        "<p>The sidebar is grouped for the role you are working as. Your work lists the screens where that role acts. View only lists the screens it follows. More screens holds the rest, one click away. A view only screen says so under its title and names who works there. " +
+        "Some screens open on the role's own slice, such as your own requests, what waits on you, or what is still due in, and every other filter, including All, is one click away. Switching roles starts each screen on the new role's default. " +
+        "The Director and VP follow every screen but only act on approvals. None of this changes who can do what: the rules still decide that.</p>") +
       section("Search",
         "<p>Use the search box at the top, or press Ctrl K (Cmd K on a Mac) or the / key. Type a record number such as PO-4001 or PR-2001, part of one such as po-40, the supplier's own invoice number, a supplier, an item, a status such as late, at risk or hold, or a screen such as receipts. " +
         "Every word you type must match, so adding words narrows the list. Use the arrow keys and Enter, or click. With the box empty it shows the records you opened last on this device.</p>") +

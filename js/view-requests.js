@@ -12,6 +12,21 @@
     { id: "closed", label: "Rejected or cancelled", test: function (r) { return r.status === "Rejected" || r.status === "Cancelled"; } }
   ];
 
+  // Each role opens on its own slice. Requesters see their own requests, approvers what waits on them,
+  // the Buyer the approved PRs to source. Every other filter, including All, stays one click away.
+  var APPROVERS = ["manager", "quality", "engineering", "director", "executive"];
+  function filtersFor(role) {
+    var me = App.roleInfo("requester").persona.split(",")[0], extra = [];
+    if (role === "requester") extra.push({ id: "mine", label: "My requests", test: function (r) { return r.requester === me; } });
+    if (APPROVERS.indexOf(role) >= 0) extra.push({ id: "waiting", label: "Waiting on me", test: function (r) {
+      var st = nextStep(r); return r.status === "Pending approval" && st && st.role === role;
+    } });
+    return extra.concat(FILTERS);
+  }
+  function defaultFilter(role) {
+    return role === "requester" ? "mine" : APPROVERS.indexOf(role) >= 0 ? "waiting" : role === "buyer" ? "approved" : "all";
+  }
+
   function nextStep(r) {
     return r.approvals.find(function (a) { return a.status === "Pending"; });
   }
@@ -78,7 +93,7 @@
     }, function (x) { return x.id + " submitted. It now needs " + P.roleLabel(x.approvals[0].role) + " approval."; });
     if (r) { App.sel.newReq = false; App.sel.requests = r.id; App.render(); }
   };
-  App.actions.reqFilter = function (el) { App.sel.reqFilter = el.dataset.arg; App.render(); };
+  App.actions.reqFilter = function (el) { App.sel.reqFilter = el.dataset.arg; App.sel.reqFilterRole = App.role; App.render(); };
   App.actions.reqSelect = function (el) { App.sel.requests = el.dataset.id; App.render(); };
 
   function comment() { var c = document.getElementById("decisionNote"); return c ? c.value : ""; }
@@ -150,8 +165,10 @@
 
   App.views.requests = function () {
     var s = App.state;
-    var fid = App.sel.reqFilter || "all";
-    var f = FILTERS.find(function (x) { return x.id === fid; });
+    var FL = filtersFor(App.role);
+    var fid = App.sel.reqFilterRole === App.role && App.sel.reqFilter ? App.sel.reqFilter : defaultFilter(App.role);
+    var f = FL.find(function (x) { return x.id === fid; }) || FL.find(function (x) { return x.id === "all"; });
+    fid = f.id;
     var list = s.requests.filter(f.test).slice().sort(function (a, b) { return b.createdAt < a.createdAt ? -1 : 1; });
     var selId = App.sel.requests;
     var cur = s.requests.find(function (r) { return r.id === selId; });
@@ -161,7 +178,7 @@
       (App.role === "requester"
         ? '<button data-act="reqToggle">' + (App.sel.newReq ? "Close form" : "New request") + "</button>"
         : '<span class="hint">Switch to Requester to raise a request.</span>') + "</div>";
-    var filters = '<div class="actions" style="margin:0 0 10px">' + FILTERS.map(function (x) {
+    var filters = '<div class="actions" style="margin:0 0 10px">' + FL.map(function (x) {
       var n = s.requests.filter(x.test).length;
       return '<button class="small ' + (x.id === fid ? "" : "ghost") + '" data-act="reqFilter" data-arg="' + x.id + '">' + esc(x.label) + " (" + n + ")</button>";
     }).join("") + "</div>";

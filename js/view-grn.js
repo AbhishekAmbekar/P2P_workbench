@@ -94,7 +94,6 @@
   App.views.grn = function () {
     var s = App.state, wh = App.role === "warehouse";
     var html = "<h2>Receipts (GRN)</h2>";
-    if (!wh) html += '<div class="note">Receiving is done by the Warehouse. Quality decides what happens to held goods.</div>';
 
     html += holdsSection();
 

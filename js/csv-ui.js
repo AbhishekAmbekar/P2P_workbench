@@ -100,7 +100,8 @@
 
   // The buttons go in the screen's header band. The import panel, when open, goes just under it.
   App.csvParts = function (tab) {
-    var canExport = !!C.exports[tab], specs = C.importsFor(tab);
+    // Import shows only to a role that can run an import on this screen. Export is for everyone.
+    var canExport = !!C.exports[tab], specs = C.importsFor(tab).filter(function (x) { return x.role === App.role; });
     if (!canExport && !specs.length) return { bar: "", panel: "" };
     var open = App.sel.csvOpen === tab && specs.length;
     return { bar: '<div class="csvbar">' +

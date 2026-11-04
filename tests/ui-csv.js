@@ -31,12 +31,13 @@ test("export downloads a CSV of the records on that screen", () => {
   check(toastText().indexOf("7 rows") >= 0, "toast " + toastText());
 });
 
-test("import shows only on screens that have one, and says which role runs it", () => {
+test("import shows only on screens that have one, and only to the role that runs it", () => {
   tab("audit"); check(!btn("Import CSV"), "audit should not import");
   tab("expedite"); check(!btn("Import CSV"), "expedite should not import");
-  role("buyer"); tab("grn"); click(btn("Import CSV"));
-  check(text().indexOf("Import receipts is for the Warehouse role") >= 0, "role hint missing");
-  check(!$("#view input[type=file]"), "no file picker for the wrong role");
+  role("buyer"); tab("grn");
+  check(!btn("Import CSV"), "the Buyer cannot import receipts");
+  check(btn("Export CSV"), "export stays for everyone");
+  role("warehouse"); tab("grn"); click(btn("Import CSV"));
 });
 
 test("the right role sees the columns, a template and a file picker", () => {

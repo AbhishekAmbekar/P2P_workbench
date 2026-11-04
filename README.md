@@ -38,6 +38,7 @@ Approval route: Manager always. Quality for items flagged for inspection. Engine
 
 - **Record pages.** Every request, PR, RFx, PO, receipt and invoice has its own page with its own link, such as `#PO-4001`. The page shows the key facts, the document flow from request to invoice with each step linked, and sections for details, price, approvals, receipts, invoices and history. Every record number in a table is a link to its page. Pages are for reading. The "Work on it" button opens the record on its own screen, where the actions are. The browser Back button returns to where you were.
 
+- **Role focus.** The sidebar is grouped for the role you are working as. "Your work" lists the screens where that role acts. "View only" lists the screens it follows, such as Purchase orders for Accounts Payable. The rest sit under "More screens", one click away, so nothing is hidden. A view only screen says so under its title and names who works there. Requests opens on the role's own slice: the Requester's own requests, what waits on an approver, or approved PRs for the Buyer. Purchase orders opens on what is still due in for the Warehouse. Import CSV shows only to the role that can run it. This sets focus only. The workflow rules still decide who can act.
 - **Search.** A search box in the header, also opened with Ctrl K, Cmd K or the / key. It finds any request, PR, RFx, PO, receipt or invoice by its number, the supplier's invoice number, the supplier, the item or a status such as late, at risk or hold. It also finds suppliers and screens. Every word typed must match. Enter opens the record page. With the box empty it shows the records you opened last, kept in this browser only.
 
 Delivery health on the dashboard compares each supplier promise date with the need by date. Under 5 days of slack is At Risk. Below zero is Late.
@@ -94,10 +95,10 @@ runs 28 checks on CSV reading, writing, export and import, and `node tests/searc
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
-`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard. `ui-search.js` covers the search panel.
+`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard. `ui-search.js` covers the search panel. `ui-roles.js` covers the sidebar groups, view only lines and each role's default slice.
 
 ## Natural next steps
 

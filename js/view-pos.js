@@ -133,6 +133,16 @@
     return h;
   }
 
+  var PO_FILTERS = [
+    { id: "all", label: "All", test: function () { return true; } },
+    { id: "open", label: "Open for receiving", test: function (s, po) { return ["Issued", "Confirmed", "Partially received", "Quality hold"].indexOf(P.poStatus(s, po)) >= 0; } },
+    { id: "risk", label: "Late or at risk", test: function (s, po) { var c = P.ctb(s, po).status; return c === "Late" || c === "At Risk"; } },
+    { id: "done", label: "Received or closed", test: function (s, po) { return ["Received", "Closed", "Cancelled"].indexOf(P.poStatus(s, po)) >= 0; } }
+  ];
+  // The Warehouse opens on what is still due in. Everyone else opens on all POs.
+  var poDefault = function (role) { return role === "warehouse" ? "open" : "all"; };
+  App.actions.poFilter = function (el) { App.sel.poFilter = el.dataset.arg; App.sel.poFilterRole = App.role; App.render(); };
+
   App.views.pos = function () {
     var s = App.state, buyer = App.role === "buyer";
     var html = "<h2>Purchase orders</h2>";
@@ -150,14 +160,20 @@
         }).join("") + "</table></div></div>";
     }
 
-    var list = s.pos.slice().sort(function (a, b) { return a.id < b.id ? 1 : -1; });
+    var fid = App.sel.poFilterRole === App.role && App.sel.poFilter ? App.sel.poFilter : poDefault(App.role);
+    var pf = PO_FILTERS.find(function (x) { return x.id === fid; }) || PO_FILTERS[0];
+    var list = s.pos.filter(function (po) { return pf.test(s, po); }).sort(function (a, b) { return a.id < b.id ? 1 : -1; });
+    html += '<div class="actions" style="margin:0 0 10px">' + PO_FILTERS.map(function (x) {
+      return '<button class="small ' + (x.id === pf.id ? "" : "ghost") + '" data-act="poFilter" data-arg="' + x.id + '">' + esc(x.label) +
+        " (" + s.pos.filter(function (po) { return x.test(s, po); }).length + ")</button>";
+    }).join("") + "</div>";
     html += '<div class="wrap"><table><tr><th>PO</th><th>Supplier</th><th>Item</th><th class="num">Value</th><th>Promised</th><th>Need by</th><th class="num">Slack</th><th>Delivery</th><th>Status</th></tr>' +
       (list.length ? list.map(function (po) {
         var c = P.ctb(s, po);
         return '<tr class="clickable ' + (po.id === App.sel.pos ? "sel" : "") + '" data-act="poSelect" data-id="' + po.id + '"><td>' + po.id + "</td><td>" + esc(App.supplier(po.supplierId).name) +
           "</td><td>" + esc(App.item(po.itemId).name) + '</td><td class="num">' + App.money(P.poTotal(po)) + "</td><td>" + po.promisedDate + "</td><td>" + po.needBy +
           '</td><td class="num">' + slackText(c) + "</td><td>" + App.status(c.status) + "</td><td>" + App.status(P.poStatus(s, po)) + "</td></tr>";
-      }).join("") : '<tr><td colspan="9" class="empty">No purchase orders yet.</td></tr>') + "</table></div>";
+      }).join("") : '<tr><td colspan="9" class="empty">' + (s.pos.length ? "No POs match this filter." : "No purchase orders yet.") + "</td></tr>") + "</table></div>";
 
     var po = s.pos.find(function (p) { return p.id === App.sel.pos; });
     html += '<div style="margin-top:12px">' + (po ? detail(po) : '<p class="hint">Select a PO to see delivery status, receipts and the supplier date.</p>') + "</div>";
