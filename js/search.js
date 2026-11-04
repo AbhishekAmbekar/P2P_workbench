@@ -20,7 +20,8 @@
     dashboard: "home overview kpi budget spend my work",
     requests: "pr prs requisition requisitions purchase request approvals approve",
     rfx: "rfq rfp quote quotes sourcing bid bids tender award",
-    pos: "po pos purchase order orders",
+    contracts: "contract contracts rate contract agreement outline blanket order release releases call off cap",
+    pos: "po pos purchase order orders release",
     expedite: "chase late overdue follow up supplier email",
     grn: "receipt receipts goods receiving receive warehouse inbound",
     services: "service services entry entries ses hours timesheet man hours labor crane hire rental consumption",
@@ -64,6 +65,12 @@
         sub: e.qty + " " + (it.uom || "") + "s " + e.period + " · " + sp.name + " · " + money(e.value), status: e.status,
         words: [e.id, e.poId, sp.name, it.id, it.name, e.period, e.status, e.status === "Submitted" ? "waiting release service entry" : "service entry", e.note].join(" ") });
     });
+    (s.contracts || []).forEach(function (c) {
+      var sp = sup(c.supplierId), items = c.lines.map(function (l) { return item(l.itemId); });
+      out.push({ kind: "Contract", id: c.id, open: c.id, tab: "contracts", title: c.id + " · " + c.title,
+        sub: sp.name + " · " + money(c.cap) + " cap · " + c.start + " to " + c.end, status: c.status,
+        words: [c.id, c.title, sp.name, c.basis, c.status, "contract rate agreement"].concat(items.map(function (it) { return it.id + " " + it.name; })).join(" ") });
+    });
     s.invoices.forEach(function (i) {
       var sp = sup(i.supplierId);
       out.push({ kind: "Invoice", id: i.id, open: i.id, alt: i.invNo, tab: "invoices", title: i.id + " · " + i.invNo,
@@ -101,7 +108,7 @@
       else total += 5;
     }
     // On a tie, the documents people look up most come first.
-    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1 }[e.kind] || 0);
+    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1, Contract: 3 }[e.kind] || 0);
   }
 
   // Returns up to LIMIT matches, best first. Records with the same score keep the newest first.

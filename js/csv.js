@@ -200,6 +200,16 @@
         }));
     } },
 
+    contracts: { file: "contracts", label: "contracts", build: function (s, now) {
+      var today = P.dateOf(now);
+      return [["Contract", "Supplier", "Title", "Item", "Agreed rate", "Start", "End", "Cap", "Released", "Remaining", "Status", "Basis"]].concat(
+        [].concat.apply([], (s.contracts || []).map(function (c) {
+          var st = P.contractStatus(s, c, today);
+          return c.lines.map(function (l) {
+            return [c.id, supName(c.supplierId), c.title, l.itemId, m2(l.price), c.start, c.end, m2(c.cap), m2(st.released), m2(Math.max(0, st.remaining)), st.status, c.basis];
+          });
+        })));
+    } },
     services: { file: "service-entries", label: "service entries", build: function (s) {
       return [["Entry", "PO", "Supplier", "Service", "Unit", "Month", "Quantity", "Rate", "Value", "Work done", "Status", "Release", "Release note"]].concat(
         (s.ses || []).map(function (e) {

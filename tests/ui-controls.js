@@ -22,8 +22,8 @@ test("budget card shows every cost center with paid, ordered and requested amoun
   role("manager"); tab("dashboard");
   check(text().indexOf("Budget by cost center") >= 0);
   ["CC-100 Operations", "CC-200 Engineering", "CC-300 Maintenance", "CC-400 Quality"].forEach(c => check(text().indexOf(c) >= 0, c + " missing"));
-  check(text().indexOf("80% of $150k") >= 0 && text().indexOf("68% of $90k") >= 0 && text().indexOf("75% of $90k") >= 0 && text().indexOf("31% of $25k") >= 0, "percentages wrong");
-  check(text().indexOf("$29,880 left") >= 0, "remaining for CC-100 missing");
+  check(text().indexOf("83% of $150k") >= 0 && text().indexOf("68% of $90k") >= 0 && text().indexOf("75% of $90k") >= 0 && text().indexOf("31% of $25k") >= 0, "percentages wrong");
+  check(text().indexOf("$24,930 left") >= 0, "remaining for CC-100 missing");
   const tips = $$("#view .hb-track [data-tip]").map(e => e.getAttribute("data-tip")).join(" | ");
   check(tips.indexOf("of which paid $17,520") >= 0, "paid amount missing from the tooltip");
 });

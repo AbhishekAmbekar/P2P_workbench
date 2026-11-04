@@ -34,7 +34,12 @@ test("an invoice is found by the supplier's own invoice number", () => {
 
 test("part of a number lists every record that starts with it, newest first", () => {
   const r = ids("po-40").filter(x => /^PO-/.test(x));
-  assert.deepStrictEqual(r, ["PO-4009", "PO-4008", "PO-4007", "PO-4006", "PO-4005", "PO-4004", "PO-4003", "PO-4002", "PO-4001"]);
+  assert.deepStrictEqual(r, ["PO-4010", "PO-4009", "PO-4008", "PO-4007", "PO-4006", "PO-4005", "PO-4004", "PO-4003", "PO-4002", "PO-4001"]);
+});
+
+test("a contract number or the word contract finds contracts", () => {
+  assert.strictEqual(ids("ct-8002")[0], "CT-8002");
+  assert.ok(ids("contract scaffold").indexOf("CT-8003") >= 0, "finds the scaffold contract by item");
 });
 
 test("a supplier name finds the supplier first, then its orders and sourcing", () => {

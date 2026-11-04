@@ -20,7 +20,7 @@
 
   // ---------- create ----------
   function createCard(r) {
-    var s = App.state, it = App.item(r.itemId), total = P.requestTotal(r);
+    var s = App.state, it = App.item(r.itemId), total = P.requestTotal(r), ct = P.contractFor(s, it.id, App.today());
     var head = '<div class="card" style="margin-bottom:12px"><h3>Create PO for ' + esc(r.prNo) + "</h3>" +
       '<p class="hint">' + r.qty + " x " + esc(it.name) + ", approved value " + App.money(total) + ", need by " + r.needBy + ".</p>";
     var body, form = '<form data-form="poCreate" data-id="' + r.id + '" class="form">';
@@ -30,12 +30,19 @@
       body = '<div class="note">Source: RFx ' + x.id + ". Awarded to " + esc(App.supplier(q.supplierId).name) + " at " + App.money(q.unitPrice) +
         " each with a lead time of " + q.leadDays + " days." + (q.tariffPct || q.freight ? " Tariff " + q.tariffPct + "%, freight " + App.money(q.freight) + " per unit, landed " + App.money(q.unitPrice * (1 + q.tariffPct / 100) + q.freight) + "." : "") +
         " These come from the awarded quote and cannot be edited here.</div>" + form;
-    } else if (it.contract) {
-      body = '<div class="note">Source: contract. ' + esc(App.supplier(it.contract.supplierId).name) + " at " + App.money(it.contract.price) +
-        " each. A contract price allows a direct PO at any value.</div>" + form +
+    } else if (ct) {
+      var left = P.contractStatus(s, ct.contract, App.today()).remaining, value = r.qty * ct.line.price;
+      if (value > left + 0.005) {
+        return head + '<div class="note warn">This release would be ' + App.money(value) + " but " + ct.contract.id + " has only " + App.money(left) +
+          " left. Raise an RFx for it instead, or set up a new contract.</div>" +
+          '<div class="actions"><button data-act="goto" data-arg="rfx" data-id="' + r.id + '">Start an RFx</button>' +
+          '<button class="ghost" data-act="poCancelNew">Close</button></div></div>';
+      }
+      body = '<div class="note">Source: release of ' + App.recLink(ct.contract.id) + ", " + esc(ct.contract.title) + ". " + esc(App.supplier(ct.contract.supplierId).name) +
+        " at the agreed rate of " + App.money(ct.line.price) + ". This release is " + App.money(value) + ", leaving " + App.money(left - value) + " on the contract. No RFx is needed.</div>" + form +
         '<label>Lead time (days)<input type="number" name="leadDays" min="0" step="1" value="7"></label>';
     } else if (total >= REF.thresholds.rfx) {
-      return head + '<div class="note warn">This is ' + App.money(total) + " with no contract. Values of " + App.money(REF.thresholds.rfx) +
+      return head + '<div class="note warn">This is ' + App.money(total) + " with no active contract. Values of " + App.money(REF.thresholds.rfx) +
         " or more need an RFx before a PO.</div>" +
         '<div class="actions"><button data-act="goto" data-arg="rfx" data-id="' + r.id + '">Start an RFx</button>' +
         '<button class="ghost" data-act="poCancelNew">Close</button></div></div>';
@@ -52,7 +59,7 @@
         '<label>Lead time (days)<input type="number" name="leadDays" min="0" step="1" value="10"></label>';
     }
     return head + body + '<label class="wide">Price reason (only needed when the price is more than ' + Math.round(REF.thresholds.priceVariance * 100) + '% above the ' +
-      (it.contract ? "contract" : "standard") + " price of " + App.money(P.refPrice(it)) + ')<input name="varianceReason" placeholder="Why the price is higher"></label>' +
+      (ct ? "contract" : "standard") + " price of " + App.money(ct ? ct.line.price : it.stdPrice) + ')<input name="varianceReason" placeholder="Why the price is higher"></label>' +
       '<div class="wide actions"><button type="submit">Issue the PO</button>' +
       '<button type="button" class="ghost" data-act="poCancelNew">Close</button></div></form></div>';
   }
@@ -87,7 +94,7 @@
       ["Supplier", sp.name], ["Item", it.id + "  " + it.name], ["Quantity", po.qty + " " + it.uom + (P.isService(po) && po.qty !== 1 ? "s" : "")],
       ["Unit price", App.money(po.unitPrice)], ["PO value", App.money(P.poTotal(po))],
       ["Landed cost", App.money(P.poLanded(po)) + (po.tariffPct || po.freight ? " (" + po.tariffPct + "% tariff, " + App.money(po.freight) + " freight per unit)" : " (no tariff or freight)")],
-      ["Reference price", App.money(po.refPrice || P.refPrice(it)) + (it.contract ? " (contract)" : " (standard)")], ["Source", po.source],
+      ["Reference price", App.money(po.refPrice || P.refPrice(it)) + (po.contractId ? " (contract)" : " (standard)")], ["Source", po.contractId ? "Release of " + po.contractId : po.source],
       ["Promised delivery", po.promisedDate + (po.confirmed ? " (supplier confirmed)" : " (not confirmed)")], ["Need by", po.needBy],
       ["Site", po.site], ["From", r.id + " / " + r.prNo + (po.rfxId ? " / " + po.rfxId : "")],
       ["Received (accepted)", t.accepted + " of " + po.qty], ["On quality hold", t.hold], ["Rejected", t.rejected], ["Invoiced and matched", invoiced + " of " + po.qty]
@@ -110,7 +117,7 @@
     }
     if (po.refPrice && po.unitPrice > po.refPrice + 0.0001) {
       var over = Math.round(100 * (po.unitPrice - po.refPrice) / po.refPrice * 10) / 10;
-      h += '<div class="note warn">Priced ' + over + "% above the " + (it.contract ? "contract" : "standard") + " price of " + App.money(po.refPrice) + "." +
+      h += '<div class="note warn">Priced ' + over + "% above the " + (po.contractId ? "contract" : "standard") + " price of " + App.money(po.refPrice) + "." +
         (po.varianceReason ? " Reason on file: " + esc(po.varianceReason) : "") + "</div>";
     }
     if (c.status === "Late" || c.status === "At Risk") {
@@ -167,9 +174,9 @@
       html += '<div class="card" style="margin-bottom:12px"><h3>PRs ready for a PO</h3><div class="wrap" style="border:0"><table><tr><th>PR</th><th>Item</th><th class="num">Value</th><th>Route</th><th></th></tr>' +
         ready.map(function (r) {
           var it = App.item(r.itemId), total = P.requestTotal(r);
-          var route = r.status === "Awarded" ? "RFx awarded" : it.contract ? "Contract" : total >= REF.thresholds.rfx ? "Needs RFx" : "Direct buy";
+          var route = App.route(r);
           return "<tr><td>" + r.prNo + "</td><td>" + esc(it.name) + '</td><td class="num">' + App.money(total) + "</td><td>" + route + "</td><td>" +
-            (buyer ? '<button class="small" data-act="goto" data-arg="pos" data-id="' + r.id + '">' + (route === "Needs RFx" ? "Review" : "Create PO") + "</button>" : '<span class="hint">Buyer creates this</span>') + "</td></tr>";
+            (buyer ? '<button class="small" data-act="goto" data-arg="pos" data-id="' + r.id + '">' + (route === "Needs RFx" ? "Review" : route.indexOf("Contract") === 0 ? "Release" : "Create PO") + "</button>" : '<span class="hint">Buyer creates this</span>') + "</td></tr>";
         }).join("") + "</table></div></div>";
     }
 

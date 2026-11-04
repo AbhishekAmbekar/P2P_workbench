@@ -18,7 +18,7 @@ test("requests list shows every status and the filter counts add up", () => {
   role("buyer"); tab("requests");
   check($$("#view tr[data-id]").length === 1, "the Buyer opens on approved PRs, got " + $$("#view tr[data-id]").length);
   clickText("#view button.small", "All");
-  check($$("#view tr[data-id]").length === 16, "expected 16 rows");
+  check($$("#view tr[data-id]").length === 17, "expected 17 rows");
   clickText("#view button.small", "Awaiting approval");
   check($$("#view tr[data-id]").length === 2, "expected 2 awaiting approval, got " + $$("#view tr[data-id]").length);
   clickText("#view button.small", "Rejected or cancelled");
@@ -40,7 +40,7 @@ test("form previews the approval route and fills the standard price when the ite
   check($("#reqPreview").textContent.indexOf("Quality, then Director") >= 0 || $("#reqPreview").textContent.indexOf("Quality") >= 0, "preview: " + $("#reqPreview").textContent);
   change(f.elements.itemId, "MR-402");
   check(f.elements.estUnit.value === "9.4", "price not filled: " + f.elements.estUnit.value);
-  check($("#reqPreview").textContent.indexOf("contract price") >= 0, "contract hint missing");
+  check($("#reqPreview").textContent.indexOf("Contract CT-8001 covers this item") >= 0, "contract hint missing: " + $("#reqPreview").textContent);
   change(f.elements.itemId, "CP-202");
   f.elements.qty.value = "30";
   f.elements.qty.dispatchEvent(new w.Event("input", { bubbles: true }));
@@ -66,20 +66,20 @@ test("a good request is created, selected, and routed to the manager", () => {
   f.elements.qty.value = "12";
   f.elements.reason.value = "Quarterly shutdown kits";
   submit(f);
-  check(toastText().indexOf("REQ-1017") >= 0, "toast: " + toastText());
+  check(toastText().indexOf("REQ-1018") >= 0, "toast: " + toastText());
   check(text().indexOf("Approval chain") >= 0, "detail panel should open");
   check(text().indexOf("Manager: waiting") >= 0, "manager should be waiting");
   check(!form(), "form should close");
 });
 
 test("wrong role cannot approve and is told who is next", () => {
-  role("director"); open("REQ-1017");
+  role("director"); open("REQ-1018");
   check(!btn("Approve"), "director should not see approve");
   check(text().indexOf("Waiting on the Manager") >= 0);
 });
 
 test("manager approval issues a PR number for a one step chain", () => {
-  role("manager"); open("REQ-1017");
+  role("manager"); open("REQ-1018");
   click(btn("Approve"));
   check(toastText().indexOf("PR-") >= 0, "toast: " + toastText());
   check(text().indexOf("Approved") >= 0);
@@ -101,9 +101,9 @@ test("the director sees approve on a request waiting for them", () => {
 });
 
 test("requester can cancel an approved request, buyer cannot", () => {
-  role("buyer"); open("REQ-1017");
+  role("buyer"); open("REQ-1018");
   check(!btn("Cancel this request"));
-  role("requester"); open("REQ-1017");
+  role("requester"); open("REQ-1018");
   click(btn("Cancel this request"));
   check(toastText().indexOf("cancelled") >= 0, "toast: " + toastText());
 });

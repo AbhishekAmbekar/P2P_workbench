@@ -8,10 +8,10 @@ const flowIds = () => $$("#view .fstep b").map(b => b.textContent);
 click($("#resetBtn"));
 role("buyer");
 
-test("the sidebar keeps all eleven sections, grouped for the role", () => {
+test("the sidebar keeps all twelve sections, grouped for the role", () => {
   const groups = $$("#tabs .navgrp").map(g => g.textContent);
   check(groups.join(",") === "Your work,View only,Help", "groups " + groups);
-  check($$('#tabs button[data-act="tab"]').length === 11, "eleven sections");
+  check($$('#tabs button[data-act="tab"]').length === 12, "twelve sections");
 });
 
 test("a PO opens as a full page with facts, document flow and sections", () => {
@@ -44,9 +44,11 @@ test("receipts, invoices and requests not yet approved have pages too", () => {
   check(flowIds().filter(x => x === "Not yet").length === 5, "later steps not yet");
 });
 
-test("a contract PO shows that no RFx was needed", () => {
+test("a contract PO shows its contract in the flow and links to the contract page", () => {
   w.App.openRecord("PO-4004");
-  check(text().indexOf("Not needed, contract buy") >= 0);
+  check(text().indexOf("Release · MRO spares rate contract") >= 0, "flow step");
+  w.App.openRecord("CT-8001");
+  check(text().indexOf("MRO spares rate contract") >= 0 && text().indexOf("PO-4004") >= 0 && text().indexOf("Agreed rates") >= 0, "contract page");
 });
 
 test("an unknown record says so instead of breaking", () => {

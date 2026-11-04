@@ -39,6 +39,14 @@ function award(s, now, x, sup, why) {
   while (x.status === "Award pending approval" && (st = x.awardApprovals.find(a => a.status === "Pending"))) P.decideAward(s, st.role, now, x.id, "Approved", "");
   return x;
 }
+// An approved contract, starting today, for tests that need one.
+function contractFor(s, supplierId, lines, cap, over) {
+  const c = P.createContract(s, "buyer", NOW, Object.assign({ supplierId, title: "Test contract", cap: cap || 40000,
+    start: day(0), end: day(365), lines: lines.map(([itemId, price]) => ({ itemId, price })) }, over || {}));
+  c.approvals.forEach(a => P.decideContract(s, a.role, NOW, c.id, "Approved", ""));
+  return c;
+}
+
 function approveAll(s, r) {
   let st;
   while ((st = r.approvals.find(a => a.status === "Pending"))) P.decide(s, st.role, NOW, r.id, "Approved", "ok");
@@ -305,6 +313,7 @@ test("larger entries go to the Director from $5,000 and the Executive from $10,0
   assert.deepStrictEqual(P.serviceChain(5000), ["manager", "director"]);
   assert.deepStrictEqual(P.serviceChain(10000), ["manager", "director", "executive"]);
   const s = P.newState();
+  contractFor(s, "keystone", [["SV-501", 66]]);
   const r = baseReq(s, { itemId: "SV-501", qty: 300, estUnit: 68, costCenter: "CC-300 Maintenance" });
   approveAll(s, r);
   const po = P.createPO(s, "buyer", NOW, r.id, { leadDays: 3 });
@@ -412,6 +421,7 @@ test("service suppliers need only a quality certificate, and services go to the 
 // ---------- 3. PO policy ----------
 test("direct PO: contract buys allowed, large uncontracted buys blocked, supplier must be qualified", () => {
   const s = P.newState();
+  contractFor(s, "meridian", [["MR-402", 9.10]]);
   const contract = baseReq(s, { itemId: "MR-402", qty: 100, estUnit: 9.4 });
   approveAll(s, contract);
   const po = P.createPO(s, "buyer", NOW, contract.id, {});
@@ -572,10 +582,105 @@ test("rejecting an invoice needs a reason and frees the invoice number", () => {
 });
 
 // ---------- seed and metrics ----------
+// ---------- contracts ----------
+test("the Buyer drafts a contract and it is checked before it goes for approval", () => {
+  const s = P.newState();
+  const f = { supplierId: "meridian", title: "MRO spares", cap: 9000, start: day(0), end: day(365), lines: [{ itemId: "MR-402", price: 9.10 }] };
+  const tryWith = over => () => P.createContract(s, "buyer", NOW, Object.assign({}, f, over));
+  throwsWith(() => P.createContract(s, "requester", NOW, f), "cannot do this");
+  throwsWith(tryWith({ title: "" }), "short title");
+  throwsWith(tryWith({ supplierId: "northwind" }), "need a qualified supplier");
+  throwsWith(tryWith({ lines: [{ itemId: "RM-101", price: 40 }] }), "does not supply");
+  throwsWith(tryWith({ lines: [] }), "at least one item");
+  throwsWith(tryWith({ lines: [{ itemId: "MR-402", price: 9.104 }] }), "to the cent");
+  throwsWith(tryWith({ lines: [{ itemId: "MR-402", price: 9 }, { itemId: "MR-402", price: 9 }] }), "twice");
+  throwsWith(tryWith({ end: day(0) }), "after the start");
+  throwsWith(tryWith({ start: day(-400), end: day(-10) }), "already passed");
+  throwsWith(tryWith({ cap: 0 }), "value cap");
+  const c = P.createContract(s, "buyer", NOW, f);
+  assert.strictEqual(c.status, "Pending approval");
+  assert.deepStrictEqual(c.approvals.map(a => a.role), ["director"], "under $50,000 the Director alone approves");
+  throwsWith(tryWith({ start: day(100) }), "already on " + c.id);
+  s.docs.meridian.quality = day(-1);
+  throwsWith(tryWith({ lines: [{ itemId: "MR-404", price: 92 }] }), "cannot get a contract");
+});
+
+test("contract approval follows the award ladder: Director, then the Executive from $50,000", () => {
+  const s = P.newState();
+  const c = P.createContract(s, "buyer", NOW, { supplierId: "crestline", title: "Crane hire next year", cap: 56000,
+    start: day(5), end: day(370), lines: [{ itemId: "SV-502", price: 1400 }] });
+  assert.deepStrictEqual(c.approvals.map(a => a.role), ["director", "executive"]);
+  throwsWith(() => P.decideContract(s, "manager", NOW, c.id, "Approved", ""), "cannot do this");
+  throwsWith(() => P.decideContract(s, "executive", NOW, c.id, "Approved", ""), "belongs to the Director");
+  P.decideContract(s, "director", NOW, c.id, "Approved", "");
+  assert.strictEqual(c.status, "Pending approval");
+  assert.ok(P.queueFor(s, "executive", NOW).some(q => q.label === "Contracts waiting for your approval"));
+  throwsWith(() => P.decideContract(s, "executive", NOW, c.id, "Rejected", ""), "Give a reason");
+  P.decideContract(s, "executive", NOW, c.id, "Rejected", "Rate is above last year, renegotiate");
+  assert.strictEqual(c.status, "Rejected");
+  const small = P.createContract(s, "buyer", NOW, { supplierId: "truegauge", title: "Calibration", cap: 6000,
+    start: day(0), end: day(365), lines: [{ itemId: "SV-505", price: 42 }] });
+  throwsWith(() => P.decideContract(s, "executive", NOW, small.id, "Approved", ""), "does not approve it");
+});
+
+test("an approved request is released from an active contract at the agreed rate, up to the cap", () => {
+  const s = P.newState();
+  const pending = P.createContract(s, "buyer", NOW, { supplierId: "meridian", title: "MRO spares", cap: 1000,
+    start: day(0), end: day(365), lines: [{ itemId: "MR-404", price: 92 }] });
+  const r1 = baseReq(s, { itemId: "MR-404", qty: 5, estUnit: 96 });
+  approveAll(s, r1);
+  throwsWith(() => P.createPO(s, "buyer", NOW, r1.id, {}), "Choose a supplier");   // not approved yet, so no contract applies
+  P.decideContract(s, "director", NOW, pending.id, "Approved", "");
+  const po = P.createPO(s, "buyer", NOW, r1.id, {});
+  assert.deepStrictEqual([po.source, po.contractId, po.unitPrice, po.refPrice], ["Contract", pending.id, 92, 92]);
+  let st = P.contractStatus(s, pending, day(0));
+  assert.deepStrictEqual([st.released, st.remaining, st.pct, st.status], [460, 540, 46, "Active"]);
+  const r2 = baseReq(s, { itemId: "MR-404", qty: 6, estUnit: 96 });   // $552 against $540 left
+  approveAll(s, r2);
+  throwsWith(() => P.createPO(s, "buyer", NOW, r2.id, {}), "has only $540.00 left");
+  const r3 = baseReq(s, { itemId: "MR-404", qty: 5, estUnit: 96 });
+  approveAll(s, r3);
+  P.createPO(s, "buyer", NOW, r3.id, {});
+  st = P.contractStatus(s, pending, day(0));
+  assert.strictEqual(st.warn, true, "92% used warns");
+  assert.strictEqual(P.contractFor(s, "MR-404", day(0)).contract.id, pending.id);
+});
+
+test("a used up or expired contract no longer applies, so normal sourcing rules return", () => {
+  const s = P.newState();
+  const c = contractFor(s, "ridgeway", [["SV-503", 495]], 4950, { end: day(30) });
+  const r = baseReq(s, { itemId: "SV-503", qty: 10, estUnit: 520 });
+  approveAll(s, r);
+  P.createPO(s, "buyer", NOW, r.id, {});
+  assert.strictEqual(P.contractStatus(s, c, day(0)).status, "Used up");
+  assert.strictEqual(P.contractFor(s, "SV-503", day(0)), null);
+  const big = baseReq(s, { itemId: "SV-503", qty: 20, estUnit: 520 });   // $10,400
+  approveAll(s, big);
+  throwsWith(() => P.createPO(s, "buyer", NOW, big.id, { supplierId: "ridgeway", unitPrice: 520 }), "no active contract");
+  const later = contractFor(s, "keystone", [["SV-501", 66]], 30000, { end: day(20) });
+  assert.strictEqual(P.contractStatus(s, later, day(0)).endsSoon, true, "ends within 60 days");
+  assert.ok(P.queueFor(s, "buyer", NOW).some(q => q.label === "Contracts ending within 60 days"));
+  assert.strictEqual(P.contractStatus(s, later, day(21)).status, "Expired");
+  assert.strictEqual(P.contractFor(s, "SV-501", day(21)), null);
+  assert.strictEqual(P.refPriceAt(s, "SV-501", day(0)), 66);
+  assert.strictEqual(P.refPriceAt(s, "SV-501", day(21)), 68, "after expiry the standard price is the reference again");
+});
+
+test("saved data from before contracts gets its old contract prices as approved contracts", () => {
+  const s = seed(NOW);
+  delete s.contracts;
+  s.pos.forEach(po => { delete po.contractId; });
+  assert.strictEqual(P.migrateContracts(s, NOW), true);
+  assert.deepStrictEqual(s.contracts.map(c => c.supplierId), ["meridian", "keystone"]);
+  assert.ok(s.pos.filter(po => po.source === "Contract" && po.itemId !== "SV-503").every(po => po.contractId), "old contract POs are linked");
+  assert.strictEqual(P.migrateContracts(s, NOW), false, "runs once");
+  assert.strictEqual(P.contractFor(s, "MR-402", day(0)).line.price, 9.10);
+});
+
 test("seed builds without breaking any rule and covers every stage", () => {
   const s = seed(NOW);
   const m = P.metrics(s, NOW);
-  assert.strictEqual(s.requests.length, 16);
+  assert.strictEqual(s.requests.length, 17);
   assert.ok(m.pending >= 2, "pending approvals");
   assert.ok(m.awaitingSourcing >= 1, "awaiting sourcing");
   assert.ok(s.rfx.some(x => x.status === "Open"));
@@ -630,10 +735,10 @@ test("budget status separates paid, ordered, requested and remaining", () => {
   const by = {}; P.budgetStatus(s).forEach(b => { by[b.name] = b; });
   const c1 = by["CC-100 Operations"];
   assert.strictEqual(c1.paid, 17520);
-  assert.strictEqual(c1.orderedOpen, 83000);
+  assert.strictEqual(c1.orderedOpen, 87950);   // includes the scaffold release from CT-8003
   assert.strictEqual(c1.requested, 19600);
-  assert.strictEqual(c1.remaining, 29880);
-  assert.strictEqual(c1.pct, 80);
+  assert.strictEqual(c1.remaining, 24930);
+  assert.strictEqual(c1.pct, 83);
   assert.strictEqual(by["CC-200 Engineering"].requested, 61540);   // includes the awarded RFx at its quoted value
   assert.strictEqual(by["CC-300 Maintenance"].pct, 75);   // includes the two service POs
   assert.strictEqual(by["CC-400 Quality"].orderedOpen, 7700);
