@@ -15,7 +15,8 @@
   };
 
   var OWNER_NAME = { ap: "Accounts Payable", buyer: "Buyer", warehouse: "Warehouse" };
-  var OWNER_TAB = { buyer: ["pos", "Open the PO"], warehouse: ["grn", "Open receipts"], requester: ["services", "Open service entries"] };
+  var OWNER_TAB = { buyer: ["pos", "Open the PO"], warehouse: ["grn", "Open receipts"], requester: ["services", "Open service entries"],
+    manager: ["services", "Open service entries"], director: ["services", "Open service entries"], executive: ["services", "Open service entries"] };
 
   // Invoices that cannot be paid until goods are received or service is confirmed, with who has to act.
   // This is the list a planner works through before Accounts Payable can release payment.

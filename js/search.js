@@ -62,7 +62,7 @@
       var po = s.pos.find(function (p) { return p.id === e.poId; }) || {}, it = item(po.itemId), sp = sup(po.supplierId);
       out.push({ kind: "Service", id: e.id, open: e.id, tab: "services", title: e.id + " · " + e.poId,
         sub: e.qty + " " + (it.uom || "") + "s " + e.period + " · " + sp.name + " · " + money(e.value), status: e.status,
-        words: [e.id, e.poId, sp.name, it.id, it.name, e.period, e.status, e.status === "Submitted" ? "waiting acceptance service entry" : "service entry", e.note].join(" ") });
+        words: [e.id, e.poId, sp.name, it.id, it.name, e.period, e.status, e.status === "Submitted" ? "waiting release service entry" : "service entry", e.note].join(" ") });
     });
     s.invoices.forEach(function (i) {
       var sp = sup(i.supplierId);

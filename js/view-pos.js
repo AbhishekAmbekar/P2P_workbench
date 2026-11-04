@@ -98,7 +98,7 @@
       var ss = P.serviceStatus(s, po), u = it.uom + "s";
       rows = rows.filter(function (x) { return ["Received (accepted)", "On quality hold", "Rejected", "Promised delivery", "Need by"].indexOf(x[0]) < 0; });
       rows.push(["Ordered", po.qty + " " + u + ", " + App.money(ss.ordered)], ["Accepted", ss.acceptedQty + " " + u + ", " + App.money(ss.accepted)],
-        ["Waiting for acceptance", ss.waitingQty + " " + u + ", " + App.money(ss.waiting)], ["Remaining", ss.leftQty + " " + u + ", " + App.money(ss.remaining)],
+        ["Waiting for release", ss.waitingQty + " " + u + ", " + App.money(ss.waiting)], ["Remaining", ss.leftQty + " " + u + ", " + App.money(ss.remaining)],
         ["Service period ends", po.needBy]);
     }
     var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + " " + (c.status !== "Delivered" ? App.status(c.status) : "") + App.recBtn(po.id) + "</h3>" +

@@ -601,7 +601,7 @@
     need(role, ["warehouse"]);
     var po = getPO(s, poId);
     if (po.cancelled) fail("This PO is cancelled.");
-    if (isService(po)) fail(po.id + " is a service PO. The Buyer records a service entry and the Requester accepts it.");
+    if (isService(po)) fail(po.id + " is a service PO. The Requester records a service entry on Service entries.");
     var qty = Number(f.qty);
     if (!Number.isInteger(qty) || qty <= 0) fail("Received quantity must be a whole number above zero.");
     if (["Accepted", "Rejected", "Hold"].indexOf(f.result) < 0) fail("Choose Accepted, Rejected or Hold.");
@@ -629,15 +629,38 @@
   }
 
   // ---------- 4b. service entries ----------
-  // A service PO is an estimated quantity (hours, days, weeks, months) at a rate. Each period the Buyer records the
-  // work from the supplier's report and the Requester accepts it, the service version of a goods receipt.
+  // A service PO is an estimated quantity (hours, days, weeks, months) at a rate. Each period the Requester records the
+  // work from the site log and the supplier's timesheet. Approvers release it by value, the service version of a goods receipt.
   var round2 = function (n) { return Math.round(n * 100) / 100; };
   var sesOf = function (s) { if (!s.ses) s.ses = []; if (!s.seq.SES) s.seq.SES = 7000; return s.ses; };
   function isService(po) { var it = REF.items.find(function (i) { return i.id === po.itemId; }); return !!(it && it.service); }
   var getSES = function (s, id) { return byId(sesOf(s), id, "Service entry"); };
 
+  // The release chain for an entry of this value: Manager always, then Director and Executive by value.
+  function serviceChain(value) {
+    var t = REF.serviceRelease || { director: 5000, executive: 10000 }, c = ["manager"];
+    if (value >= t.director) c.push("director");
+    if (value >= t.executive) c.push("executive");
+    return c;
+  }
+  // Entries saved before the release chain existed get their chain when first read.
+  function releasesOf(e) {
+    if (!e.releases) {
+      e.releases = serviceChain(e.value).map(function (r) {
+        return e.status === "Accepted" ? { role: r, status: "Released", at: e.decidedAt, note: "" } : { role: r, status: "Pending", at: null, note: "" };
+      });
+    }
+    return e.releases;
+  }
+  // The role whose release the entry waits for, or null when it is not waiting.
+  function nextReleaser(e) {
+    if (e.status !== "Submitted") return null;
+    var p = releasesOf(e).find(function (x) { return x.status === "Pending"; });
+    return p ? p.role : null;
+  }
+
   function postService(s, role, now, poId, f) {
-    need(role, ["buyer"]);
+    need(role, ["requester"]);
     var po = getPO(s, poId), it = item(po.itemId);
     if (!isService(po)) fail(po.id + " is for goods. The Warehouse posts a goods receipt instead.");
     if (po.cancelled) fail("This PO is cancelled.");
@@ -649,24 +672,43 @@
     var t = grnTotals(s, poId), left = round2(po.qty - t.accepted - t.hold);
     if (qty > left + 1e-9) {
       fail("That would take " + po.id + " past its ordered quantity. Only " + left + " " + it.uom + "s (" + fmt(left * po.unitPrice) +
-        ") remain. The Requester must raise a new request for more.");
+        ") remain. Raise a new request for more.");
     }
     var e = { id: nextId(s, "SES", "SES"), poId: poId, period: f.period, qty: qty, value: round2(qty * po.unitPrice), note: note,
-      status: "Submitted", by: role, at: now, decidedAt: null, decisionNote: "" };
+      status: "Submitted", by: role, at: now, decidedAt: null, decisionNote: "", decidedBy: null };
+    e.releases = serviceChain(e.value).map(function (r) { return { role: r, status: "Pending", at: null, note: "" }; });
     sesOf(s).push(e);
-    log(s, now, role, e.id, "Service entry recorded on " + po.id + ": " + qty + " " + it.uom + "s for " + f.period, fmt(e.value) + ". " + note);
+    log(s, now, role, e.id, "Service entry recorded on " + po.id + ": " + qty + " " + it.uom + "s for " + f.period,
+      fmt(e.value) + ". " + note + (/[.!?]$/.test(note) ? "" : ".") + " Release: " + e.releases.map(function (x) { return roleLabel(x.role); }).join(" then ") + ".");
     return e;
   }
 
+  // decision is "Accepted" (release) or "Rejected" (send back to the Requester). Releases go in order.
   function decideService(s, role, now, sesId, decision, note) {
-    need(role, ["requester"]);
+    need(role, ["manager", "director", "executive"]);
     var e = getSES(s, sesId);
-    if (e.status !== "Submitted") fail("This service entry is already " + e.status.toLowerCase() + ".");
-    if (decision !== "Accepted" && decision !== "Rejected") fail("Choose Accepted or Rejected.");
+    if (e.status !== "Submitted") fail("This service entry is already " + (e.status === "Accepted" ? "released" : "sent back") + ".");
+    if (decision !== "Accepted" && decision !== "Rejected") fail("Choose Release or Send back.");
+    var step = releasesOf(e).find(function (x) { return x.status === "Pending"; });
+    if (step.role !== role) {
+      var mine = e.releases.find(function (x) { return x.role === role; });
+      fail(mine ? (mine.status === "Released" ? "You have already released this entry. It waits for the " + roleLabel(step.role) + "."
+                                               : "The next release belongs to the " + roleLabel(step.role) + ", not the " + roleLabel(role) + ".")
+                : "This entry is " + fmt(e.value) + ", so the " + roleLabel(role) + " does not need to release it.");
+    }
     var n = (note || "").trim();
-    if (decision === "Rejected" && n.length < 5) fail("Say what is wrong with the entry, so the Buyer can correct it with the supplier.");
-    e.status = decision; e.decidedAt = now; e.decisionNote = n;
-    log(s, now, role, e.id, "Service entry " + decision.toLowerCase() + " for " + e.poId, n || fmt(e.value) + " confirmed as done");
+    if (decision === "Rejected") {
+      if (n.length < 5) fail("Say what is wrong with the entry, so the Requester can correct it with the supplier.");
+      step.status = "Sent back"; step.at = now; step.note = n;
+      e.status = "Rejected"; e.decidedAt = now; e.decisionNote = n; e.decidedBy = role;
+      log(s, now, role, e.id, "Service entry sent back for " + e.poId, n);
+      return e;
+    }
+    step.status = "Released"; step.at = now; step.note = n;
+    var next = e.releases.find(function (x) { return x.status === "Pending"; });
+    if (!next) { e.status = "Accepted"; e.decidedAt = now; e.decisionNote = n; e.decidedBy = role; }
+    log(s, now, role, e.id, "Service entry released by the " + roleLabel(role) + " for " + e.poId,
+      (n ? n + ". " : "") + (next ? "Now waits for the " + roleLabel(next.role) + "." : fmt(e.value) + " accepted and can be invoiced."));
     return e;
   }
 
@@ -836,18 +878,20 @@
     });
     var t = grnTotals(s, po.id);
     var invoiceable = t.accepted - invoicedQty(s, po.id, inv.id, ["Matched", "Paid"]);
+    // For a service PO, work waiting for release goes to the next releaser of the oldest waiting entry.
+    var waitOn = svc ? (sesOf(s).filter(function (e) { return e.poId === po.id; }).map(nextReleaser).filter(Boolean)[0] || "requester") : null;
     if (dup) issues.push({ code: "DUPLICATE", owner: "ap", msg: "Invoice number " + inv.invNo + " is already on file for this supplier." });
     if (invoiceable <= 0) {
-      if (svc) issues.push({ code: "NO_RECEIPT", owner: t.hold > 0 ? "requester" : "buyer",
-        msg: t.hold > 0 ? "No accepted service yet. " + t.hold + " " + uom + "s are recorded and waiting for the Requester to accept them."
-                        : "No service entry is recorded against this PO. The Buyer records it from the supplier's report." });
+      if (svc) issues.push({ code: "NO_RECEIPT", owner: t.hold > 0 ? waitOn : "requester",
+        msg: t.hold > 0 ? "No accepted service yet. " + t.hold + " " + uom + "s are recorded and waiting for the " + roleLabel(waitOn) + " to release them."
+                        : "No service entry is recorded against this PO. The Requester records it from the site log." });
       else issues.push({ code: "NO_RECEIPT", owner: "warehouse",
         msg: t.hold > 0 ? "No accepted receipt yet. " + t.hold + " units are on quality hold."
                         : "No accepted goods receipt is posted against this PO." });
     } else if (inv.qty > invoiceable) {
-      issues.push({ code: "QTY_OVER", owner: svc ? (t.hold > 0 ? "requester" : "buyer") : "warehouse",
+      issues.push({ code: "QTY_OVER", owner: svc ? (t.hold > 0 ? waitOn : "requester") : "warehouse",
         msg: "Invoice bills " + inv.qty + " " + uom + "s but only " + invoiceable + " are accepted and not yet invoiced." +
-          (svc && t.hold > 0 ? " " + t.hold + " more are waiting for the Requester's acceptance." : "") });
+          (svc && t.hold > 0 ? " " + t.hold + " more are waiting for the " + roleLabel(waitOn) + " to release them." : "") });
     } else if (inv.qty < invoiceable) {
       issues.push({ code: "QTY_UNDER", owner: "ap",
         msg: "Invoice bills " + inv.qty + " units but " + invoiceable + " are accepted and not yet invoiced." });
@@ -975,10 +1019,14 @@
     }).length, "rfx");
     var openPOs = s.pos.filter(function (po) { return ["Issued", "Confirmed", "Partially received"].indexOf(poStatus(s, po)) >= 0; });
     var invFor = function (who) { return s.invoices.filter(function (i) { return invOwners(i).indexOf(who) >= 0; }).length; };
-    var sesWaiting = sesOf(s).filter(function (e) { return e.status === "Submitted"; }).length;
+    add("Service entries waiting for your release", sesOf(s).filter(function (e) { return nextReleaser(e) === role; }).length, "services");
+    if (["manager", "director", "executive"].indexOf(role) >= 0) add("Invoices waiting on your service release", invFor(role), "invoices");
     if (role === "requester") {
-      add("Service entries waiting for your acceptance", sesWaiting, "services");
-      add("Invoices waiting on your service acceptance", invFor("requester"), "invoices");
+      // A sent back entry stays on the list until a later entry is recorded for the same PO and month.
+      add("Service entries sent back to you", sesOf(s).filter(function (e) {
+        return e.status === "Rejected" && !sesOf(s).some(function (x) { return x.poId === e.poId && x.period === e.period && x.id > e.id; });
+      }).length, "services");
+      add("Invoices waiting on your service entry", invFor("requester"), "invoices");
       // Only the requester's own requests. The name is the persona on the Requester role, the same name the request form saves.
       var me = (REF.roles.find(function (x) { return x.id === "requester"; }) || { persona: "" }).persona.split(",")[0];
       add("Your requests that were rejected", s.requests.filter(function (r) { return r.status === "Rejected" && r.requester === me; }).length, "requests");
@@ -997,7 +1045,6 @@
       add("POs not yet confirmed by supplier", s.pos.filter(function (po) { return poStatus(s, po) === "Issued"; }).length, "pos");
       add("POs to chase with the supplier", expediteList(s, now || new Date().toISOString()).length, "expedite");
       add("Invoice exceptions on your desk", invFor("buyer"), "invoices");
-      add("Service entries rejected by the Requester", sesOf(s).filter(function (e) { return e.status === "Rejected"; }).length, "services");
       add("Service POs over " + (REF.serviceWarnPct || 80) + "% used", s.pos.filter(function (po) {
         return isService(po) && !po.cancelled && poStatus(s, po) !== "Closed" && serviceStatus(s, po).warn;
       }).length, "services");
@@ -1062,6 +1109,7 @@
     createPO: createPO, confirmPO: confirmPO, updatePromise: updatePromise, amendPOPrice: amendPOPrice,
     grnTotals: grnTotals, postGRN: postGRN, releaseHold: releaseHold,
     isService: isService, postService: postService, decideService: decideService, serviceStatus: serviceStatus,
+    serviceChain: serviceChain, serviceReleases: releasesOf, nextReleaser: nextReleaser,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
     rejectInvoice: rejectInvoice, payInvoice: payInvoice, invOwners: invOwners,

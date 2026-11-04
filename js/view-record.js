@@ -193,7 +193,7 @@
       (f.service ? section("Service consumption", '<div class="pad">' + App.serviceBar(po) + "</div>" +
         table(["Entry", "Month", "#Quantity", "#Value", "Work done", "Status"], f.ses.map(function (e) {
           return [App.recLink(e.id), '<span class="nowrap">' + esc(e.period) + "</span>", n(e.qty) + " " + esc(it.uom) + (e.qty === 1 ? "" : "s"), money(e.value), esc(e.note), App.status(e.status)];
-        }), "No service recorded yet."), "Recorded by the Buyer, accepted by the Requester", true) :
+        }), "No service recorded yet."), "Recorded by the Requester, released by value", true) :
       section("Delivery and receipts", '<div class="pad"><div class="stack"><i class="seg-acc" style="width:' + pct(t.accepted) + '%"></i><i class="seg-hold" style="width:' + pct(t.hold) + '%"></i></div>' +
         '<div class="legend"><span class="l-acc">Accepted ' + n(t.accepted) + "</span>" + (t.hold ? '<span class="l-hold">On hold ' + n(t.hold) + "</span>" : "") +
         "<span>Still due " + n(P.leftToReceive(s, po)) + "</span>" + (t.rejected ? "<span>Rejected " + n(t.rejected) + "</span>" : "") + "</div></div>" +
@@ -228,10 +228,13 @@
     return band({ home: "services", id: id, title: e.id, flow: f, pills: App.status(e.status),
       sub: esc("Service entry on " + po.id + " · " + App.supplier(po.supplierId).name + " · " + it.name),
       facts: [["Month", esc(e.period)], ["Quantity", u(e.qty)], ["Value", money(e.value)], ["Rate", money(po.unitPrice)],
-        ["Recorded", day(e.at)], ["Decided", e.decidedAt ? day(e.decidedAt) : "Waiting"]]
+        ["Recorded", day(e.at)], ["Released", e.status === "Accepted" ? day(e.decidedAt) : e.status === "Rejected" ? "Sent back" : "Waiting"]]
     }) + '<div class="page"><div class="secs">' +
       section("Entry", '<div class="pad">' + dl([["PO", App.recLink(po.id)], ["Work done", esc(e.note)], ["Recorded by", esc(P.roleLabel(e.by))],
-        ["Requester decision", e.status === "Submitted" ? "Waiting for the Requester" : esc(e.status) + (e.decisionNote ? ": " + esc(e.decisionNote) : "")]]) + "</div>") +
+        ["Status", esc(e.status === "Submitted" ? "Waiting for the " + P.roleLabel(P.nextReleaser(e)) : e.status === "Accepted" ? "Released" : "Sent back") + (e.decisionNote ? ": " + esc(e.decisionNote) : "")]]) + "</div>" +
+        table(["Release by", "Status", "Date", "Note"], P.serviceReleases(e).map(function (x) {
+          return [esc(P.roleLabel(x.role)), App.status(x.status === "Pending" ? (P.nextReleaser(e) === x.role ? "Waiting" : "Not yet") : x.status), x.at ? day(x.at) : "", esc(x.note)];
+        }), "")) +
       section("All entries on " + po.id, '<div class="pad">' + App.serviceBar(po) + "</div>" + table(["Entry", "Month", "#Quantity", "Status"], f.ses.map(function (x) {
         return [x.id === e.id ? "<b>" + x.id + "</b>" : App.recLink(x.id), esc(x.period), u(x.qty), App.status(x.status)];
       }), "")) +

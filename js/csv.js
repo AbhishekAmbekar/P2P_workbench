@@ -201,10 +201,11 @@
     } },
 
     services: { file: "service-entries", label: "service entries", build: function (s) {
-      return [["Entry", "PO", "Supplier", "Service", "Unit", "Month", "Quantity", "Rate", "Value", "Work done", "Status", "Requester note"]].concat(
+      return [["Entry", "PO", "Supplier", "Service", "Unit", "Month", "Quantity", "Rate", "Value", "Work done", "Status", "Release", "Release note"]].concat(
         (s.ses || []).map(function (e) {
           var po = s.pos.find(function (p) { return p.id === e.poId; }) || {}, it = item(po.itemId) || {};
-          return [e.id, e.poId, supName(po.supplierId), it.name, it.uom, e.period, e.qty, m2(po.unitPrice), m2(e.value), e.note, e.status, e.decisionNote];
+          return [e.id, e.poId, supName(po.supplierId), it.name, it.uom, e.period, e.qty, m2(po.unitPrice), m2(e.value), e.note, e.status,
+            (e.releases || []).map(function (x) { return P.roleLabel(x.role) + " " + x.status.toLowerCase(); }).join(", "), e.decisionNote];
         }));
     } },
 
