@@ -16,6 +16,8 @@ click($("#resetBtn"));
 
 test("requests list shows every status and the filter counts add up", () => {
   role("buyer"); tab("requests");
+  check($$("#view tr[data-id]").length === 1, "the Buyer opens on approved PRs, got " + $$("#view tr[data-id]").length);
+  clickText("#view button.small", "All");
   check($$("#view tr[data-id]").length === 14, "expected 14 rows");
   clickText("#view button.small", "Awaiting approval");
   check($$("#view tr[data-id]").length === 2, "expected 2 awaiting approval, got " + $$("#view tr[data-id]").length);

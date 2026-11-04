@@ -152,6 +152,34 @@
     });
   }
 
+  // ---------- sidebar by role ----------
+  // Your work: screens where this role acts. View only: screens it follows. More screens: the rest, folded away
+  // but one click open, so nothing is hidden. The engine rules still decide who can act; this only sets the focus.
+  App.focus = function (role) { return (REF.focus && REF.focus[role || App.role]) || { work: [], view: [] }; };
+  App.viewOnly = function (tab, role) {
+    var f = App.focus(role);
+    return ["dashboard", "guide", "audit"].indexOf(tab) < 0 && f.work.indexOf(tab) < 0;
+  };
+  App.actions.navMore = function () { App.sel.navMore = !App.sel.navMore; App.render(); };
+  function navHtml(badges) {
+    var f = App.focus(), tab = function (id) { return App.tabs.find(function (t) { return t.id === id; }); };
+    var btn = function (t, cls) {
+      return '<button data-act="tab" data-arg="' + t.id + '" class="' + [t.id === App.tab ? "on" : "", cls || ""].join(" ").trim() + '">' +
+        "<span>" + App.esc(t.label) + "</span>" + (badges[t.id] ? '<span class="badge">' + badges[t.id] + "</span>" : "") + "</button>";
+    };
+    var grp = function (label) { return '<div class="navgrp">' + App.esc(label) + "</div>"; };
+    var more = App.tabs.filter(function (t) {
+      return t.id !== "dashboard" && t.id !== "guide" && f.work.indexOf(t.id) < 0 && f.view.indexOf(t.id) < 0;
+    });
+    var open = App.sel.navMore || more.some(function (t) { return t.id === App.tab; });
+    return btn(tab("dashboard")) +
+      grp("Your work") + f.work.map(function (id) { return btn(tab(id)); }).join("") +
+      grp("View only") + f.view.map(function (id) { return btn(tab(id), "ro"); }).join("") +
+      (more.length ? '<div class="navmore" data-act="navMore" role="button" tabindex="0" aria-expanded="' + open + '">More screens <span>' + more.length + "</span></div>" +
+        more.map(function (t) { return btn(t, "ro more" + (open ? "" : " hid")); }).join("") : "") +
+      grp("Help") + btn(tab("guide"));
+  }
+
   // ---------- rendering ----------
   App.render = function () {
     var sel = document.getElementById("roleSel");
@@ -166,11 +194,7 @@
 
     var badges = {};
     P.queueFor(App.state, App.role, App.now()).forEach(function (q) { badges[q.tab] = (badges[q.tab] || 0) + q.count; });
-    document.getElementById("tabs").innerHTML = App.tabs.map(function (t) {
-      return (t.group ? '<div class="navgrp">' + App.esc(t.group) + "</div>" : "") +
-        '<button data-act="tab" data-arg="' + t.id + '" class="' + (t.id === App.tab ? "on" : "") + '">' +
-        "<span>" + App.esc(t.label) + "</span>" + (badges[t.id] ? '<span class="badge">' + badges[t.id] + "</span>" : "") + "</button>";
-    }).join("");
+    document.getElementById("tabs").innerHTML = navHtml(badges);
 
     var view = App.views[App.tab];
     var html;
@@ -217,7 +241,10 @@
     m = /^<p class="hint">([\s\S]*?)<\/p>/.exec(html);
     if (m) { sub = m[1]; html = html.slice(m[0].length); }
     var csv = App.csvParts ? App.csvParts(App.tab) : { bar: "", panel: "" };
-    return '<div class="band"><div class="bandrow"><div><h2>' + title + "</h2>" + (sub ? '<p class="bandsub">' + sub + "</p>" : "") + "</div>" +
+    var ro = App.viewOnly(App.tab) && REF.screenOwners && REF.screenOwners[App.tab];
+    return '<div class="band"><div class="bandrow"><div><h2>' + title + (ro ? ' <span class="pill mut ropill">View only</span>' : "") + "</h2>" +
+      (sub ? '<p class="bandsub">' + sub + "</p>" : "") +
+      (ro ? '<p class="bandro">You are working as ' + App.esc(App.roleInfo().label) + ", so this screen is for reading. " + App.esc(REF.screenOwners[App.tab]) + "</p>" : "") + "</div>" +
       csv.bar + "</div></div>" + (csv.panel ? '<div class="csvpanel">' + csv.panel + "</div>" : "") + '<div class="page">' + html + "</div>";
   };
 
@@ -230,6 +257,9 @@
     if (!el || el.disabled) return;
     var fn = App.actions[el.dataset.act];
     if (fn) fn(el, e);
+  });
+  document.addEventListener("keydown", function (e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".navmore")) { e.preventDefault(); App.actions.navMore(); }
   });
   document.addEventListener("submit", function (e) {
     var form = e.target.closest("form[data-form]");
@@ -260,7 +290,8 @@
   App.start = function () {
     if (!load()) { App.state = P.seed(App.now()); }
     document.getElementById("roleSel").addEventListener("change", function (e) {
-      App.role = e.target.value; save(); App.render();
+      // A new role starts every screen on its own default filter.
+      App.role = e.target.value; App.sel.reqFilter = App.sel.poFilter = null; App.sel.navMore = false; save(); App.render();
     });
     bindRolePick();
     document.getElementById("resetBtn").addEventListener("click", function () {

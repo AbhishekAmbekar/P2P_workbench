@@ -13,7 +13,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 ## Structure
 
 - `index.html` loads the scripts in a fixed order: `data.js`, `logic.js`, `csv.js`, `search.js`, `seed.js`, `app.js`, `csv-ui.js`, `search-ui.js`, the `view-*.js` files, `view-record.js`, then `App.start()`. Check for duplicate script tags when adding a file. Every css and js link ends in `?v=N`. Raise N by one in any pull request that changes a css or js file, or browsers keep the old copy for up to 10 minutes after a merge.
-- `js/data.js`: reference data. Thresholds, roles, cost centers and budgets, spend categories, suppliers, items.
+- `js/data.js`: reference data. Thresholds, roles, role focus (`focus`: the screens each role works on and views, and `screenOwners`: who works on each screen), cost centers and budgets, spend categories, suppliers, items.
 - `js/logic.js`: the workflow engine. Pure functions on a state object. Every action checks the role and throws a readable `Error` when a rule is broken. Nothing here touches the page.
 - `js/csv.js`: CSV reader and writer, one export per screen, and the import specs. Pure, like `logic.js`. Each import row calls an engine action, never writes records directly. Imports run on a copy of the state and keep it only if every row passed.
 - `js/search.js`: `P.search.search(state, query, now, tabs)` finds and ranks records, suppliers and screens. Pure. Every word must match; a full record number goes to the top. No SAP codes: the owner decided search only.
@@ -60,14 +60,14 @@ The screen tests need jsdom installed in a folder outside the repo. Pass an abso
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
 
-Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN or INV and a number). Next: role focus: the sidebar splits into "Your work" and "View only" per role, each screen opens on that role's slice, view only screens say so, and the Director and VP get an oversight home. Then dashboard charts in plain SVG. Then:
+Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN or INV and a number). Role focus part 1 is done: sidebar groups per role from `REF.focus` (`App.focus`, `App.viewOnly` in `app.js`), the view only line in the band, default filters on Requests and Purchase orders (reset when the role changes), Import shown only to the role that runs it. Known gap: the Requester's sidebar badge counts all rejected requests, not only their own. Next: part 2, the oversight home for the Director and VP with dashboard charts in plain SVG. Then:
 
 1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.

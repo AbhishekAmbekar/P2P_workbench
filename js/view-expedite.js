@@ -124,7 +124,6 @@
     var html = "<h2>Expedite</h2>" +
       '<p class="hint">Open POs that need a nudge, worst first. Overdue means the supplier\'s own date has passed. Late means the promised date is after the need by date. ' +
       "At risk means under 5 days of slack. Not confirmed means the PO went out more than 2 days ago with no reply.</p>";
-    if (!isBuyer) html += '<div class="note">The Buyer chases suppliers. You can read the list. Switch roles at the top to draft emails.</div>';
     if (isBuyer && App.sel.chase) html += draftCard(isBuyer);
     if (!rows.length) return html + '<div class="card"><p class="empty">Nothing needs chasing right now.</p></div>';
     html += '<div class="wrap"><table><tr><th>PO</th><th>Item</th><th>Supplier</th><th>Why</th><th class="num">Still due</th><th class="num">Value</th><th>Needed by</th><th>Promised</th><th>Last draft</th><th></th></tr>' +

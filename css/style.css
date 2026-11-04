@@ -210,3 +210,16 @@ kbd{font:600 11px Inter,system-ui,sans-serif;color:var(--mut);background:var(--c
 body.sp-on{overflow:hidden}
 @media (max-width:900px){.searchbox .sb-text,.searchbox kbd{display:none}.searchbox{flex:none;width:36px;justify-content:center;margin:0 0 0 auto;padding:0}}
 @media (max-width:600px){.sp{padding:8px}.sp-box{max-height:92vh}.sp-kind{width:58px}.sp-st{display:none}.sp-foot{display:none}}
+/* Sidebar by role */
+.tabs button.ro{opacity:.72}
+.tabs button.ro.on{opacity:1}
+.tabs button.hid{display:none}
+.navmore{display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding:7px 10px;border-radius:6px;font-size:var(--fs-sm);color:var(--mut);cursor:pointer;user-select:none}
+.navmore:hover,.navmore:focus{background:var(--bg);outline:none}
+.navmore:after{content:"";width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--mut);margin-left:8px;transition:transform .15s}
+.navmore[aria-expanded="true"]:after{transform:rotate(180deg)}
+.navmore span{margin-left:auto;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:0 6px}
+.ropill{vertical-align:3px;margin-left:6px}
+.bandro{margin:6px 0 0;font-size:var(--fs-sm);color:var(--mut);display:flex;gap:6px;align-items:baseline}
+.bandro:before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--mut);opacity:.6;transform:translateY(-1px)}
+@media (max-width:900px){.tabs button.hid{display:flex}.navmore{display:none}.tabs button.ro{opacity:.8}}
