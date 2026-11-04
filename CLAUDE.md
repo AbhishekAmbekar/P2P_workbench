@@ -22,7 +22,8 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 - `js/app.js`: shell, the Working as menu (a button and list that open downward, with the hidden `#roleSel` select holding the value), sidebar sections (`App.tabs`, with `group` labels), saving to localStorage, and `App.run`, which runs an engine action, saves, redraws and shows a message or the error.
 - `js/charts.js`: `App.charts.budget`, `.spend` and `.split` return plain HTML charts. Committed is indigo `#4338ca`, pipeline orange `#eb6834`: this pair passed the dataviz palette validator (lightness band, color blind and normal vision separation, contrast). States use the status colors and always carry a written label. Marks carry `data-tip`; the shell in `app.js` shows it as a tooltip on hover, focus or tap.
 - `js/csv-ui.js`: the CSV bar and import panel. `App.render` puts the bar above every screen that has an export or import.
-- `js/view-record.js`: the full page for one record (REQ, PR, RFX, PO, GRN, INV), built on `P.docFlow`. Read only. `App.openRecord(id)`, `App.recLink(id)` and `App.recBtn(id)` open it. The address shows `#tab` or `#PO-4001`, and opening a record adds a Back step.
+- `js/view-services.js`: the Service entries screen and `App.serviceBar(po)`, the ordered, accepted, waiting and remaining bar also used on the PO panel and record page.
+- `js/view-record.js`: the full page for one record (REQ, PR, RFX, PO, GRN, SES, INV), built on `P.docFlow`. Read only. `App.openRecord(id)`, `App.recLink(id)` and `App.recBtn(id)` open it. The address shows `#tab` or `#PO-4001`, and opening a record adds a Back step.
 - `js/view-*.js`: one file per screen. Events use `data-act`, `data-form` and `data-change` attributes and `App.actions.*`.
 - `css/style.css`: styling. Always light, even when the computer is in dark mode. Dark colors exist under `:root.dark` for a future switch, but nothing turns them on. White and indigo theme, full width layout. Inter font, shipped in `fonts/` under the SIL Open Font License, so nothing loads from outside. Type sizes are the `--fs-*` variables, 14px base. `App.page` in `app.js` turns each screen's leading `<h2>` and `<p class="hint">` into the white header band with the CSV buttons. Keep the red, amber and green status colors as they are. The demo data note sits in the footer. `.wrap` around wide tables keeps phones from scrolling sideways.
 - `tests/`: engine checks and screen tests.
@@ -36,6 +37,7 @@ A procure to pay web app: request, PR approval, RFx, PO, goods receipt, invoice,
 - The Buyer recommends an award (`P.recommendAward`); it does not stand until approved (`P.decideAward`). Director always; Executive also from $50,000 of landed value or for a conditional supplier, a single bid or a pick that is not the top eligible quote. Approvals go in order. A rejection needs a reason and returns the RFx to Evaluating, keeping the old recommendation in `pastRecommendations`. The Manager does not approve awards (owner's decision). RFx saved before this change have no `techRole` and count as technically acceptable.
 - Expired quotes and expired or missing supplier documents block the award and the PO.
 - Receipts can be partial. Over receipt is blocked. Rejected units do not count as received. Units on quality hold count as received until Quality decides.
+- Service items (`service: true` in `data.js`) are ordered as a quantity of hours, days, weeks or months at a rate. The Buyer records service entries (`P.postService`, SES numbers) from the supplier's report; the Requester accepts or rejects them (`P.decideService`, a reason is required to reject). An entry cannot pass the ordered quantity. Submitted entries use up the PO like held goods; only accepted service can be invoiced. Above `serviceWarnPct` (80) the PO warns. Service POs have no goods receipt and are left out of delivery health and expedite. Missing service exceptions go to the Requester when work waits for acceptance, else the Buyer. Saved data without `state.ses` is handled in `load()`.
 - Invoices need an exact three way match: price to the cent, and quantity against accepted, not yet invoiced units. Duplicates are caught. Each exception names who can fix it.
 - Delivery health: slack is need by date minus promised date. Under 5 days is At Risk, below zero is Late.
 - CSV import only adds records through engine actions, as the role that owns the action. One failing row means nothing is imported. Import does not edit or delete records, and does not create POs, awards or approvals.
@@ -63,21 +65,21 @@ The screen tests need jsdom installed in a folder outside the repo. Pass an abso
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard ui-services; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
 ## Planned next
 
-Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN or INV and a number). Role focus part 1 is done: sidebar groups per role from `REF.focus` (`App.focus`, `App.viewOnly` in `app.js`), the view only line in the band, default filters on Requests and Purchase orders (reset when the role changes), Import shown only to the role that runs it. The Requester's badge counts only their own rejected requests. The Manager follows every screen like the Director and VP (owner's decision), and all three get the Oversight home (`App.oversees`). Part 2 is done: dashboard charts for everyone, and the Oversight home (approvals, charts, invoice exceptions by value).
+Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN, SES or INV and a number). Role focus part 1 is done: sidebar groups per role from `REF.focus` (`App.focus`, `App.viewOnly` in `app.js`), the view only line in the band, default filters on Requests and Purchase orders (reset when the role changes), Import shown only to the role that runs it. The Requester's badge counts only their own rejected requests. The Manager follows every screen like the Director and VP (owner's decision), and all three get the Oversight home (`App.oversees`). Part 2 is done: dashboard charts for everyone, and the Oversight home (approvals, charts, invoice exceptions by value).
 
-Next, agreed with the owner: **service POs and consumption**. From the owner's own planner work: material POs are cleared by receipt, but service POs are consumed over time. Plan: service items ordered as a value, monthly service entries recorded and accepted by the Requester (the service version of a goods receipt), the PO page showing ordered, accepted and remaining value with a warning near the limit, invoices for services matched exactly against accepted, not yet invoiced service value, and a clearing list showing invoices blocked on a receipt or service confirmation. Build it with planned item 4 (contracts, blanket orders and releases), since both consume a PO over time. Then:
+Service POs and consumption is done: service items, monthly service entries recorded by the Buyer and accepted by the Requester, the PO consumption bar with an 80% warning, exact service invoice matching, and the clearing list on Invoices. Next, agreed with the owner: **contracts, blanket orders and releases** (planned item 4), in its own pull request. Contracts and blanket orders also consume a PO over time, so reuse the service consumption pattern. Then:
 
 1. A way to start with an empty workspace. (CSV import and export is done.)
 2. A settings screen: cost centers, categories, thresholds and users editable, not fixed in code.
 3. Supplier scorecard from receipt and invoice history.
-4. Contracts with dates and remaining volume, blanket orders and releases (to be built with service POs, above).
+4. Contracts with dates and remaining volume, blanket orders and releases (next, above).
 5. Returns and credit notes for rejected goods.
 6. Reorder points and safety stock for MRO items.
 7. Spend analysis over time, and a planning view (requirements against stock and open POs) as a separate module.

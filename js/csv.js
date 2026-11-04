@@ -200,6 +200,14 @@
         }));
     } },
 
+    services: { file: "service-entries", label: "service entries", build: function (s) {
+      return [["Entry", "PO", "Supplier", "Service", "Unit", "Month", "Quantity", "Rate", "Value", "Work done", "Status", "Requester note"]].concat(
+        (s.ses || []).map(function (e) {
+          var po = s.pos.find(function (p) { return p.id === e.poId; }) || {}, it = item(po.itemId) || {};
+          return [e.id, e.poId, supName(po.supplierId), it.name, it.uom, e.period, e.qty, m2(po.unitPrice), m2(e.value), e.note, e.status, e.decisionNote];
+        }));
+    } },
+
     invoices: { file: "invoices", label: "invoices", build: function (s) {
       return [["Invoice", "Supplier invoice no", "PO", "Supplier", "Quantity", "Unit price", "Amount", "Invoice date", "Due date", "Status",
         "Matched first time", "Issues", "Fix owner", "Paid on"]].concat(

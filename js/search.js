@@ -23,6 +23,7 @@
     pos: "po pos purchase order orders",
     expedite: "chase late overdue follow up supplier email",
     grn: "receipt receipts goods receiving receive warehouse inbound",
+    services: "service services entry entries ses hours timesheet man hours labor crane hire rental consumption",
     invoices: "invoice ap accounts payable bill bills payment pay match",
     suppliers: "supplier suppliers vendor vendors documents certificate",
     audit: "audit log history trail who changed",
@@ -56,6 +57,12 @@
       out.push({ kind: "Receipt", id: g.id, open: g.id, tab: "grn", title: g.id + " · " + g.poId,
         sub: g.qty + " " + (it.uom || "") + " " + it.name + " · " + sp.name, status: g.result,
         words: [g.id, g.poId, sp.name, it.id, it.name, g.result, g.result === "Hold" ? "quality hold" : "", g.note].join(" ") });
+    });
+    (s.ses || []).forEach(function (e) {
+      var po = s.pos.find(function (p) { return p.id === e.poId; }) || {}, it = item(po.itemId), sp = sup(po.supplierId);
+      out.push({ kind: "Service", id: e.id, open: e.id, tab: "services", title: e.id + " · " + e.poId,
+        sub: e.qty + " " + (it.uom || "") + "s " + e.period + " · " + sp.name + " · " + money(e.value), status: e.status,
+        words: [e.id, e.poId, sp.name, it.id, it.name, e.period, e.status, e.status === "Submitted" ? "waiting acceptance service entry" : "service entry", e.note].join(" ") });
     });
     s.invoices.forEach(function (i) {
       var sp = sup(i.supplierId);
@@ -94,7 +101,7 @@
       else total += 5;
     }
     // On a tie, the documents people look up most come first.
-    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1 }[e.kind] || 0);
+    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1 }[e.kind] || 0);
   }
 
   // Returns up to LIMIT matches, best first. Records with the same score keep the newest first.

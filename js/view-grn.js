@@ -97,7 +97,7 @@
 
     html += holdsSection();
 
-    var open = s.pos.filter(function (po) { return RECEIVABLE.indexOf(P.poStatus(s, po)) >= 0; })
+    var open = s.pos.filter(function (po) { return !P.isService(po) && RECEIVABLE.indexOf(P.poStatus(s, po)) >= 0; })
       .sort(function (a, b) { return a.promisedDate < b.promisedDate ? -1 : 1; });
     html += '<div class="wrap"><table><tr><th>PO</th><th>Supplier</th><th>Item</th><th>Promised</th><th class="num">Ordered</th><th class="num">Accepted</th><th class="num">Hold</th><th class="num">Left to receive</th><th>Status</th><th></th></tr>' +
       (open.length ? open.map(function (po) {

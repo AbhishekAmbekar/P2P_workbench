@@ -5,8 +5,8 @@
   "use strict";
   var App = window.App, P = App.P, REF = App.REF, esc = App.esc, money = App.money;
 
-  var ID = /^(REQ|PR|RFX|PO|GRN|INV)-\d+$/;
-  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices" };
+  var ID = /^(REQ|PR|RFX|PO|GRN|INV|SES)-\d+$/;
+  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services" };
   var day = function (iso) { return iso ? P.longDate(iso) : ""; };
   var n = function (x) { return Number(x).toLocaleString("en-US"); };
 
@@ -30,6 +30,7 @@
   App.actions.recWork = function (el) {
     var id = el.dataset.id, kind = id.split("-")[0], f = P.docFlow(App.state, id);
     if (kind === "GRN") App.go("grn", f.po.id);
+    else if (kind === "SES") { App.sel.services = f.po.id; App.go("services"); }
     else if (kind === "PR" || kind === "REQ") App.go("requests", f.request.id);
     else App.go(HOME[kind], kind === "INV" ? null : id);
   };
@@ -76,7 +77,12 @@
     else step("RFx", null, f.po ? "Not needed, " + f.po.source.toLowerCase() + " buy" : "Not started", "next");
     if (f.po) step("PO", f.po.id, P.poStatus(App.state, f.po));
     else step("PO", null, "Not yet", "next");
-    if (f.grns.length) {
+    if (f.service) {
+      if (f.ses.length) {
+        var ss = P.serviceStatus(App.state, f.po), lastS = f.ses[f.ses.length - 1];
+        step("Service entry", lastS.id, plural(f.ses.length, "entry", "entries") + " · " + ss.pct + "% used");
+      } else step("Service entry", null, f.po ? "Nothing recorded" : "Not yet", "next");
+    } else if (f.grns.length) {
       var t = P.grnTotals(App.state, f.po.id), last = f.grns[f.grns.length - 1];
       step("Receipt", last.id, (f.grns.length > 1 ? plural(f.grns.length, "receipt") + " · " : "") + n(t.accepted) + " accepted" + (t.hold ? ", " + n(t.hold) + " on hold" : ""));
     } else step("Receipt", null, f.po ? "Nothing received" : "Not yet", "next");
@@ -94,7 +100,7 @@
         "<em>" + st.text + "</em></div>";
     }).join("") + "</div>";
   }
-  function plural(k, word) { return k + " " + word + (k === 1 ? "" : "s"); }
+  function plural(k, word, many) { return k + " " + (k === 1 ? word : many || word + "s"); }
 
   function band(o) {
     var home = App.tabs.find(function (t) { return t.id === o.home; });
@@ -167,13 +173,15 @@
     var varPct = po.refPrice ? Math.round(1000 * (po.unitPrice - po.refPrice) / po.refPrice) / 10 : 0;
     var pct = function (k) { return Math.min(100, Math.round(100 * k / po.qty)); };
     return band({ home: "pos", id: id, title: po.id, flow: f,
-      pills: App.status(st) + (c.status !== "Delivered" ? " " + App.status(c.status) + (c.slack !== null ? ' <span class="muted">' + c.slack + " days slack</span>" : "") : ""),
-      sub: esc(sp.name + " · " + n(po.qty) + " " + it.uom + " " + it.name + " (" + it.id + ") · " + it.category + ", " + REF.categoryType[it.category]),
-      facts: [["PO value", money(P.poTotal(po))], ["Unit price", money(po.unitPrice)], ["Promised", day(po.promisedDate) + (po.confirmed ? "" : ' <span class="pill info">Unconfirmed</span>')],
+      pills: App.status(st) + (f.service ? " " + App.pill("Service", "mut") : c.status !== "Delivered" ? " " + App.status(c.status) + (c.slack !== null ? ' <span class="muted">' + c.slack + " days slack</span>" : "") : ""),
+      sub: esc(sp.name + " · " + n(po.qty) + " " + it.uom + (P.isService(po) && po.qty !== 1 ? "s of " : " ") + it.name + " (" + it.id + ") · " + it.category + ", " + REF.categoryType[it.category]),
+      facts: f.service ? (function () { var ss = P.serviceStatus(s, po); return [["PO value", money(ss.ordered)], ["Rate", money(po.unitPrice) + " per " + esc(it.uom)],
+          ["Accepted", money(ss.accepted)], ["Waiting", money(ss.waiting)], ["Remaining", money(ss.remaining) + (ss.warn ? ' <span class="pill warn">' + ss.pct + "% used</span>" : "")], ["Invoiced", money(invoiced)]]; })() :
+        [["PO value", money(P.poTotal(po))], ["Unit price", money(po.unitPrice)], ["Promised", day(po.promisedDate) + (po.confirmed ? "" : ' <span class="pill info">Unconfirmed</span>')],
         ["Need by", day(po.needBy)], ["Received", n(t.accepted) + " of " + n(po.qty)], ["Invoiced", money(invoiced)]]
     }) + '<div class="page"><div class="secs">' +
       section("Details", '<div class="pad">' + dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status) + " · rating " + sp.quality], ["Item", esc(it.id + " " + it.name)],
-        ["Quantity", n(po.qty) + " " + esc(it.uom)], ["Deliver to", esc(po.site)], ["Cost center", esc(f.request.costCenter)], ["Requester", esc(f.request.requester)],
+        ["Quantity", n(po.qty) + " " + esc(it.uom) + (f.service && po.qty !== 1 ? "s" : "")], ["Deliver to", esc(po.site)], ["Cost center", esc(f.request.costCenter)], ["Requester", esc(f.request.requester)],
         ["Source", esc(po.source) + (po.rfxId ? " " + App.recLink(po.rfxId) : "")], ["Payment terms", "Net " + sp.terms], ["Issued", day(po.createdAt)],
         ["Supplier email", esc(P.contactOf(s, sp.id)) || '<span class="muted">None saved</span>']]) + "</div>") +
       section("Price", '<div class="pad">' + dl([["Unit price", money(po.unitPrice) + " " + (po.refPrice ? App.pill((varPct > 0 ? varPct + "% above " : varPct < 0 ? Math.abs(varPct) + "% below " : "Equal to ") + (it.contract ? "contract " : "standard ") + money(po.refPrice), varPct > 10 ? "bad" : varPct > 0 ? "warn" : "ok") : "")],
@@ -182,16 +190,20 @@
         (f.rfx ? table(["Supplier", "#Landed", "#Lead", "#Score"], P.scoreRFx(f.rfx, s, App.now()).map(function (q) {
           return [esc(App.supplier(q.supplierId).name) + (q.supplierId === po.supplierId ? " " + App.pill("Awarded", "ok") : ""), money(q.landed), q.leadDays + " d", q.total.toFixed(1)];
         }), "") : ""), f.rfx ? "Against reference and the other bids" : "Against reference") +
+      (f.service ? section("Service consumption", '<div class="pad">' + App.serviceBar(po) + "</div>" +
+        table(["Entry", "Month", "#Quantity", "#Value", "Work done", "Status"], f.ses.map(function (e) {
+          return [App.recLink(e.id), '<span class="nowrap">' + esc(e.period) + "</span>", n(e.qty) + " " + esc(it.uom) + (e.qty === 1 ? "" : "s"), money(e.value), esc(e.note), App.status(e.status)];
+        }), "No service recorded yet."), "Recorded by the Buyer, accepted by the Requester", true) :
       section("Delivery and receipts", '<div class="pad"><div class="stack"><i class="seg-acc" style="width:' + pct(t.accepted) + '%"></i><i class="seg-hold" style="width:' + pct(t.hold) + '%"></i></div>' +
         '<div class="legend"><span class="l-acc">Accepted ' + n(t.accepted) + "</span>" + (t.hold ? '<span class="l-hold">On hold ' + n(t.hold) + "</span>" : "") +
         "<span>Still due " + n(P.leftToReceive(s, po)) + "</span>" + (t.rejected ? "<span>Rejected " + n(t.rejected) + "</span>" : "") + "</div></div>" +
         table(["Receipt", "Date", "#Qty", "Result", "Note"], f.grns.map(function (g) {
           return [App.recLink(g.id), day(g.date), n(g.qty), App.status(g.result), esc(g.note + (g.releaseNote ? " Quality: " + g.releaseNote : ""))];
-        }), "Nothing received yet."), "Rejected units do not count as received") +
+        }), "Nothing received yet."), "Rejected units do not count as received")) +
       section("Invoices", table(["Invoice", "Supplier no", "#Qty", "#Amount", "Status", "Due"], f.invoices.map(function (i) {
         return [App.recLink(i.id), esc(i.invNo), n(i.qty), money(i.qty * i.unitPrice), App.status(i.status), day(i.dueDate)];
       }), "No invoices yet.")) +
-      section("History", '<div class="pad">' + history([po.id].concat(f.grns.map(function (g) { return g.id; }), f.invoices.map(function (i) { return i.id; }))) + "</div>", "This PO, its receipts and invoices") +
+      section("History", '<div class="pad">' + history([po.id].concat(f.grns.map(function (g) { return g.id; }), f.ses.map(function (g) { return g.id; }), f.invoices.map(function (i) { return i.id; }))) + "</div>", "This PO, its receipts, service entries and invoices") +
       "</div></div>";
   }
 
@@ -208,6 +220,22 @@
         return [x.id === g.id ? "<b>" + x.id + "</b>" : App.recLink(x.id), day(x.date), n(x.qty), App.status(x.result)];
       }), "")) +
       section("History", '<div class="pad">' + history([g.id]) + "</div>", "From the audit trail") + "</div></div>";
+  }
+
+  function sesPage(f, id) {
+    var e = App.state.ses.find(function (x) { return x.id === id; }), po = f.po, it = App.item(po.itemId);
+    var u = function (q) { return n(q) + " " + it.uom + (q === 1 ? "" : "s"); };
+    return band({ home: "services", id: id, title: e.id, flow: f, pills: App.status(e.status),
+      sub: esc("Service entry on " + po.id + " · " + App.supplier(po.supplierId).name + " · " + it.name),
+      facts: [["Month", esc(e.period)], ["Quantity", u(e.qty)], ["Value", money(e.value)], ["Rate", money(po.unitPrice)],
+        ["Recorded", day(e.at)], ["Decided", e.decidedAt ? day(e.decidedAt) : "Waiting"]]
+    }) + '<div class="page"><div class="secs">' +
+      section("Entry", '<div class="pad">' + dl([["PO", App.recLink(po.id)], ["Work done", esc(e.note)], ["Recorded by", esc(P.roleLabel(e.by))],
+        ["Requester decision", e.status === "Submitted" ? "Waiting for the Requester" : esc(e.status) + (e.decisionNote ? ": " + esc(e.decisionNote) : "")]]) + "</div>") +
+      section("All entries on " + po.id, '<div class="pad">' + App.serviceBar(po) + "</div>" + table(["Entry", "Month", "#Quantity", "Status"], f.ses.map(function (x) {
+        return [x.id === e.id ? "<b>" + x.id + "</b>" : App.recLink(x.id), esc(x.period), u(x.qty), App.status(x.status)];
+      }), "")) +
+      section("History", '<div class="pad">' + history([e.id]) + "</div>", "From the audit trail") + "</div></div>";
   }
 
   function invPage(f, id) {
@@ -230,13 +258,15 @@
   App.recordPage = function (id) {
     var f = App.isRecordId(id) ? P.docFlow(App.state, id) : null;
     var kind = id.split("-")[0];
-    if (!f || (kind === "GRN" && !App.state.grns.some(function (g) { return g.id === id; })) || (kind === "INV" && !App.state.invoices.some(function (x) { return x.id === id; }))) {
+    if (!f || (kind === "GRN" && !App.state.grns.some(function (g) { return g.id === id; })) || (kind === "INV" && !App.state.invoices.some(function (x) { return x.id === id; })) ||
+        (kind === "SES" && !(App.state.ses || []).some(function (x) { return x.id === id; }))) {
       return '<div class="band"><h2>' + esc(id) + ' not found</h2><p class="bandsub">There is no record with that number in this workspace. It may be from before a Reset demo.</p></div>';
     }
     if (kind === "REQ" || kind === "PR") return requestPage(f, id);
     if (kind === "RFX") return rfxPage(f, id);
     if (kind === "PO") return poPage(f, id);
     if (kind === "GRN") return grnPage(f, id);
+    if (kind === "SES") return sesPage(f, id);
     return invPage(f, id);
   };
 })();

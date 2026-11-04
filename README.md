@@ -17,9 +17,10 @@ Switch between nine roles to play each person in the chain. A record created in 
 | RFx | Invite suppliers, collect quotes, technical evaluation by the user side, score acceptable offers on landed cost, Buyer recommends, leadership approves | Two bidders or a sole source reason. Offers that fail the technical check, unqualified suppliers and suppliers with expired documents cannot win. Expired quotes cannot be awarded. Off ranking awards need a written reason. Director approves every award; the Executive too from $50,000 or for a single bid, a conditional supplier or an off ranking pick |
 | PO | Issue from an award, a contract or a direct buy | RFx required at $10,000 or more with no contract. PO capped at 10% over the approved value. A price more than 10% above the contract or standard price needs a reason |
 | GRN | Warehouse posts accepted, rejected or held goods | No over receipt. Held goods wait for Quality |
-| Invoice | Exact three way match against PO and receipts | Price and quantity must agree. Duplicates are caught. Each gap goes to a named fix owner |
+| Service entry | Buyer records monthly service work from the supplier's report, Requester accepts it | Cannot pass the ordered quantity. Warns above 80% used. Only accepted service can be invoiced |
+| Invoice | Exact three way match against PO and receipts or accepted service | Price and quantity must agree. Duplicates are caught. Each gap goes to a named fix owner |
 
-Spend categories are Direct (raw materials, components, packaging) and Indirect (MRO). Items are generic examples from different industries, so the tool is not tied to one business.
+Spend categories are Direct (raw materials, components, packaging) and Indirect (MRO, services). Items are generic examples from different industries, so the tool is not tied to one business.
 
 Approval route: Manager always. Quality for items flagged for inspection. Engineering for engineered components. Director from $5,000. Executive from $50,000, or whenever the request would take its cost center past budget.
 
@@ -41,7 +42,8 @@ Approval route: Manager always. Quality for items flagged for inspection. Engine
 
 - **Role focus.** The sidebar is grouped for the role you are working as. "Your work" lists the screens where that role acts. "View only" lists the screens it follows, such as Purchase orders for Accounts Payable. The rest sit under "More screens", one click away, so nothing is hidden. A view only screen says so under its title and names who works there. The Manager, Director and VP follow every screen and act only on approvals. Requests opens on the role's own slice: the Requester's own requests, what waits on an approver, or approved PRs for the Buyer. Purchase orders opens on what is still due in for the Warehouse. Import CSV shows only to the role that can run it. This sets focus only. The workflow rules still decide who can act.
 - **Charts and the oversight home.** The dashboard has four charts: budget by cost center (committed and pipeline against the budget line), spend by category, delivery health and invoices by status. Hover, focus or tap a bar to see its exact value. Clicking a delivery or invoice state opens that list, already filtered. The numbers come from the same engine figures as the tables. The Manager, Director and VP get an Oversight home instead: approvals first, then the charts, invoice exceptions by value with their fix owners, the KPI tiles and the late list. Charts are plain HTML and CSS, with no library. There is no spend over time chart yet, because the demo has too little history to make one honest.
-- **Search.** A search box in the header, also opened with Ctrl K, Cmd K or the / key. It finds any request, PR, RFx, PO, receipt or invoice by its number, the supplier's invoice number, the supplier, the item or a status such as late, at risk or hold. It also finds suppliers and screens. Every word typed must match. Enter opens the record page. With the box empty it shows the records you opened last, kept in this browser only.
+- **Service POs and consumption.** Material POs are cleared by receipt. Service POs are used up over time. A service item, such as technician labor per man hour, mobile crane hire per day, scaffold rental per week or a compressor maintenance contract per month, is ordered as a quantity at a rate. Each month the Buyer records a service entry from the supplier's timesheet or day sheet, and the Requester accepts it or sends it back with a reason. The PO shows ordered, accepted, waiting and remaining value, and warns above 80% used. An entry cannot take the PO past its ordered quantity. Service invoices match exactly against accepted, not yet invoiced service. The Invoices screen lists every invoice waiting on a receipt or a service confirmation, with who has to act. Service POs are not on the delivery health or expedite lists, because they have no single delivery date. Each entry has its own record page, such as `#SES-7001`. Contracts and blanket orders with releases come next.
+- **Search.** A search box in the header, also opened with Ctrl K, Cmd K or the / key. It finds any request, PR, RFx, PO, receipt, service entry or invoice by its number, the supplier's invoice number, the supplier, the item or a status such as late, at risk or hold. It also finds suppliers and screens. Every word typed must match. Enter opens the record page. With the box empty it shows the records you opened last, kept in this browser only.
 
 Delivery health on the dashboard compares each supplier promise date with the need by date. Under 5 days of slack is At Risk. Below zero is Late.
 
@@ -88,7 +90,7 @@ Plain HTML, CSS and JavaScript. No framework and no dependencies. The Inter font
 node tests/logic.test.js
 ```
 
-runs 56 checks on the workflow engine, and
+runs 63 checks on the workflow engine, and
 
 ```
 node tests/csv.test.js
@@ -98,13 +100,14 @@ runs 28 checks on CSV reading, writing, export and import, and `node tests/searc
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard ui-services; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
-`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard. `ui-search.js` covers the search panel. `ui-roles.js` covers the sidebar groups, view only lines and each role's default slice. `ui-dashboard.js` covers the charts, their tooltips and clicks, and the oversight home.
+`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard. `ui-search.js` covers the search panel. `ui-roles.js` covers the sidebar groups, view only lines and each role's default slice. `ui-dashboard.js` covers the charts, their tooltips and clicks, and the oversight home. `ui-services.js` covers service entries, acceptance, the usage warning and the clearing list.
 
 ## Natural next steps
 
-- Invoice tolerance rules and a blanket order with releases.
+- Contracts with dates and remaining volume, blanket orders and releases.
+- Invoice tolerance rules.
 - Supplier scorecards built from receipt and invoice history.
 - Sign in, and a shared backend so more than one person can use the same data.

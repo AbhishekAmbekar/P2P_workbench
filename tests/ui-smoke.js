@@ -40,7 +40,7 @@ function submit(form) { form.dispatchEvent(new w.Event("submit", { bubbles: true
 // ---- shell and dashboard ----
 test("page loads with no script errors and shows the dashboard", () => {
   check(text().indexOf("desk") >= 0, "role desk card missing");
-  check($$('#tabs button[data-act="tab"]').length === 10, "expected 10 sections");
+  check($$('#tabs button[data-act="tab"]').length === 11, "expected 11 sections");
   check($("#roleSel").options.length === 9, "expected 9 roles");
 });
 
@@ -71,7 +71,7 @@ test("state survives a reload through localStorage", () => {
 
 test("reset restores the demo", () => {
   click($("#resetBtn"));
-  check(JSON.parse(w.localStorage.getItem("p2p-workbench-v2")).state.requests.length === 14);
+  check(JSON.parse(w.localStorage.getItem("p2p-workbench-v2")).state.requests.length === 16);
 });
 
 module.exports = { w, $, $$, test, check, text, click, clickText, role, tab, toastText, fill, submit,

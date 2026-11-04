@@ -15,7 +15,24 @@
   };
 
   var OWNER_NAME = { ap: "Accounts Payable", buyer: "Buyer", warehouse: "Warehouse" };
-  var OWNER_TAB = { buyer: ["pos", "Open the PO"], warehouse: ["grn", "Open receipts"] };
+  var OWNER_TAB = { buyer: ["pos", "Open the PO"], warehouse: ["grn", "Open receipts"], requester: ["services", "Open service entries"] };
+
+  // Invoices that cannot be paid until goods are received or service is confirmed, with who has to act.
+  // This is the list a planner works through before Accounts Payable can release payment.
+  function clearingList(s) {
+    var rows = s.invoices.filter(function (i) {
+      return i.status === "Exception" && i.match && i.match.issues.some(function (x) { return x.code === "NO_RECEIPT" || x.code === "QTY_OVER"; });
+    });
+    var html = '<div class="card" style="margin-bottom:12px"><h3>Waiting on a receipt or service confirmation (' + rows.length + ")</h3>" +
+      '<p class="hint">These invoices cannot match until goods are received or the service is accepted. Each one names who has to act.</p>';
+    if (!rows.length) return html + '<p class="empty">Nothing is blocked on a receipt or a service confirmation.</p></div>';
+    return html + '<div class="wrap" style="border:0"><table><tr><th>Invoice</th><th>PO</th><th>Supplier</th><th>Kind</th><th class="num">Amount</th><th>Who acts</th><th>What is missing</th></tr>' +
+      rows.map(function (i) {
+        var po = poOf(i.poId), issue = i.match.issues.find(function (x) { return x.code === "NO_RECEIPT" || x.code === "QTY_OVER"; });
+        return "<tr><td>" + i.id + "</td><td>" + i.poId + "</td><td>" + esc(App.supplier(i.supplierId).name) + "</td><td>" + (P.isService(po) ? "Service" : "Goods") +
+          '</td><td class="num">' + App.money(i.qty * i.unitPrice) + "</td><td>" + App.pill(P.roleLabel(issue.owner), "info") + '</td><td class="muted">' + esc(issue.msg) + "</td></tr>";
+      }).join("") + "</table></div></div>";
+  }
 
   function poOf(id) { return App.state.pos.find(function (p) { return p.id === id; }); }
   function invoiceable(po, exceptId) {
@@ -115,6 +132,7 @@
     if (ap) html += formCard();
     else html += '<div class="note">Invoices are entered by Accounts Payable. Switch roles at the top to enter one.</div>';
 
+    html += clearingList(s);
     var exc = s.invoices.filter(function (i) { return i.status === "Exception"; });
     html += "<h3>Exceptions (" + exc.length + ")</h3>" + (exc.length ? exc.map(exceptionCard).join("") : '<p class="empty">No invoice exceptions.</p>');
 

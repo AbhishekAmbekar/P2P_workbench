@@ -28,7 +28,7 @@ test("export downloads a CSV of the records on that screen", () => {
   const f = w.App.csv.last;
   check(/^p2p-purchase-orders-\d{4}-\d\d-\d\d\.csv$/.test(f.name), "file name " + f.name);
   check(f.text.indexOf("PO-4001") >= 0 && f.text.indexOf("PO,Request,PR") === 0, "content");
-  check(toastText().indexOf("7 rows") >= 0, "toast " + toastText());
+  check(toastText().indexOf("9 rows") >= 0, "toast " + toastText());
 });
 
 test("import shows only on screens that have one, and only to the role that runs it", () => {

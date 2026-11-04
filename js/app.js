@@ -15,6 +15,7 @@
       { id: "pos", label: "Purchase orders", group: "Order" },
       { id: "expedite", label: "Expedite" },
       { id: "grn", label: "Receipts (GRN)", group: "Receive and pay" },
+      { id: "services", label: "Service entries" },
       { id: "invoices", label: "Invoices" },
       { id: "suppliers", label: "Suppliers", group: "Records" },
       { id: "audit", label: "Audit trail" },
@@ -37,6 +38,7 @@
   App.pill = function (text, kind) { return '<span class="pill ' + (kind || "mut") + '">' + App.esc(text) + "</span>"; };
   var STATUS_KIND = {
     "Pending approval": "info", Approved: "ok", Rejected: "bad", Cancelled: "mut", Sourcing: "info", Awarded: "ok", Ordered: "ok",
+    Service: "mut", "In progress": "info", Consumed: "ok", Submitted: "info",
     Open: "info", "Technical review": "warn", Evaluating: "warn", "Award pending approval": "info", Pending: "mut", "Not reviewed": "mut",
     Issued: "info", Confirmed: "ok", "Partially received": "warn", "Quality hold": "warn", Received: "ok", Closed: "mut",
     Accepted: "ok", Hold: "warn", Matched: "ok", Exception: "bad", Paid: "mut",
@@ -58,6 +60,9 @@
       var d = JSON.parse(raw);
       if (!d.state || !d.state.requests || !d.state.docs) return false;
       App.state = d.state;
+      // Saved before service POs existed: add the empty list, so old data keeps working without a reset.
+      if (!App.state.ses) App.state.ses = [];
+      if (!App.state.seq.SES) App.state.seq.SES = 7000;
       if (d.role && App.roleInfo(d.role)) App.role = d.role;
       if (d.tab && App.tabs.some(function (t) { return t.id === d.tab; })) App.tab = d.tab;
       return true;
@@ -210,7 +215,7 @@
     }
     // A record number at the start of a table cell becomes a link to its full page, on every screen.
     // Clicking the link opens the record page. Clicking elsewhere on the row still opens the quick panel.
-    html = html.replace(/<td>((?:REQ|PR|RFX|PO|GRN|INV)-\d{4})(?=[<\s])/g,
+    html = html.replace(/<td>((?:REQ|PR|RFX|PO|GRN|INV|SES)-\d{4})(?=[<\s])/g,
       '<td class="nw"><a class="rec" href="#$1" data-act="rec" data-id="$1">$1</a>');
     // Dates in table cells stay on one line instead of breaking at the hyphen.
     html = html.replace(/<td>(\d{4}-\d\d-\d\d)<\/td>/g, '<td class="nw">$1</td>');

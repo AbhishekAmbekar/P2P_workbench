@@ -23,13 +23,13 @@ test("only Accounts Payable gets the entry form", () => {
 
 test("seed exceptions are listed with a fix owner for each reason", () => {
   role("ap"); tab("invoices");
-  check(text().indexOf("Exceptions (2)") >= 0, "expected 2 exceptions");
+  check(text().indexOf("Exceptions (3)") >= 0, "expected 3 exceptions: price, quantity and a service waiting for acceptance");
   const price = card("MM-20413"), qty = card("MM-20477");
   check(price.textContent.indexOf("Invoice price $9.40 does not equal PO price $9.10") >= 0, "price reason wrong");
   check(price.textContent.indexOf("Fix owner: Buyer") >= 0);
   check(qty.textContent.indexOf("bills 320 units but only 300") >= 0, "quantity reason wrong");
   check(qty.textContent.indexOf("Fix owner: Warehouse") >= 0);
-  check(text().indexOf("Matched and ready to pay (0)") >= 0);
+  check(text().indexOf("Matched and ready to pay (1)") >= 0, "the second month of technician hours is matched");
 });
 
 test("the form follows the chosen PO and shows what can be invoiced", () => {
@@ -51,14 +51,14 @@ test("invoice with no number or a bad price is blocked", () => {
 test("a billed quantity over what is accepted fails the match and names the Warehouse", () => {
   enter({ poId: "PO-4001", invNo: "NF-90001", qty: "1500", unitPrice: "41.5", date: inDays(0) });
   check(toastText().indexOf("failed the match") >= 0, "toast: " + toastText());
-  check(text().indexOf("Exceptions (3)") >= 0);
+  check(text().indexOf("Exceptions (4)") >= 0);
   check(card("NF-90001").textContent.indexOf("only 1200") >= 0);
 });
 
 test("a clean invoice matches first time and shows up ready to pay", () => {
   enter({ poId: "PO-4001", invNo: "NF-90002", qty: "1200", unitPrice: "41.5", date: inDays(0) });
   check(toastText().indexOf("matched first time") >= 0, "toast: " + toastText());
-  check(text().indexOf("Matched and ready to pay (1)") >= 0);
+  check(text().indexOf("Matched and ready to pay (2)") >= 0);
 });
 
 test("a duplicate invoice number is caught", () => {
