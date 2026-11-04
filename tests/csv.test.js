@@ -29,7 +29,7 @@ function unconfirmedPO() {
   const r = P.createRequest(s, "requester", NOW, { requester: "T", itemId: "MR-402", qty: 50, estUnit: 9.4, needBy: day(30),
     site: "Plant A", costCenter: "CC-300 Maintenance", reason: "Bearings for line 2" });
   r.approvals.forEach(a => P.decide(s, a.role, NOW, r.id, "Approved", ""));
-  const po = P.createPO(s, "buyer", NOW, r.id, { leadDays: 10 });
+  const po = P.createPO(s, "buyer", NOW, r.id, { supplierId: "meridian", unitPrice: 9.1, leadDays: 10 });
   return { s, po };
 }
 

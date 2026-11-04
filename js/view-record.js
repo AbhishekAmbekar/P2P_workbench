@@ -5,8 +5,8 @@
   "use strict";
   var App = window.App, P = App.P, REF = App.REF, esc = App.esc, money = App.money;
 
-  var ID = /^(REQ|PR|RFX|PO|GRN|INV|SES)-\d+$/;
-  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services" };
+  var ID = /^(REQ|PR|RFX|PO|GRN|INV|SES|CT)-\d+$/;
+  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services", CT: "contracts" };
   var day = function (iso) { return iso ? P.longDate(iso) : ""; };
   var n = function (x) { return Number(x).toLocaleString("en-US"); };
 
@@ -28,9 +28,10 @@
   App.actions.rec = function (el, e) { if (e) e.preventDefault(); App.openRecord(el.dataset.id); };
   // Opens the record on its working screen, selected, so the actions there apply to it.
   App.actions.recWork = function (el) {
-    var id = el.dataset.id, kind = id.split("-")[0], f = P.docFlow(App.state, id);
+    var id = el.dataset.id, kind = id.split("-")[0], f = kind === "CT" ? null : P.docFlow(App.state, id);
     if (kind === "GRN") App.go("grn", f.po.id);
     else if (kind === "SES") { App.sel.services = f.po.id; App.go("services"); }
+    else if (kind === "CT") { App.sel.contracts = id; App.go("contracts"); }
     else if (kind === "PR" || kind === "REQ") App.go("requests", f.request.id);
     else App.go(HOME[kind], kind === "INV" ? null : id);
   };
@@ -74,6 +75,7 @@
     if (r.prNo) step("PR", r.prNo, plural(r.approvals.length, "approval") + " · " + day(r.approvedAt));
     else step("PR", null, r.status === "Rejected" ? "Rejected" : r.status === "Cancelled" ? "Cancelled" : "Waiting for " + P.roleLabel((r.approvals.find(function (a) { return a.status === "Pending"; }) || {}).role), "next");
     if (f.rfx) step(f.rfx.type, f.rfx.id, plural(f.rfx.quotes.length, "quote") + " · " + f.rfx.status.toLowerCase());
+    else if (f.contract) step("Contract", f.contract.id, "Release · " + esc(f.contract.title));
     else step("RFx", null, f.po ? "Not needed, " + f.po.source.toLowerCase() + " buy" : "Not started", "next");
     if (f.po) step("PO", f.po.id, P.poStatus(App.state, f.po));
     else step("PO", null, "Not yet", "next");
@@ -107,7 +109,7 @@
     return '<div class="band rec"><div class="crumb"><a href="#' + o.home + '" data-act="tab" data-arg="' + o.home + '">' + esc(home.label) + "</a> / " + esc(o.id) + "</div>" +
       '<div class="bandrow"><div class="trow"><h2>' + esc(o.title) + "</h2>" + (o.pills || "") + "</div>" +
       '<div class="actions" style="margin:0"><button type="button" data-act="recWork" data-id="' + o.id + '">Work on it in ' + esc(home.label) + "</button></div></div>" +
-      '<p class="bandsub">' + o.sub + "</p>" + facts(o.facts) + flowStrip(o.flow, o.id) + "</div>";
+      '<p class="bandsub">' + o.sub + "</p>" + facts(o.facts) + (o.flow ? flowStrip(o.flow, o.id) : "") + "</div>";
   }
 
   // ---------- one page per kind ----------
@@ -123,7 +125,7 @@
     }) + '<div class="page"><div class="secs">' +
       section("Details", '<div class="pad">' + dl([["Item", esc(it.id + " " + it.name)], ["Estimated unit price", money(r.estUnit)], ["Standard price", money(P.refPrice(it))],
         ["Deliver to", esc(r.site)], ["Cost center", esc(r.costCenter)], ["Requester", esc(r.requester)], ["Reason", esc(r.reason)], ["Raised", day(r.createdAt)],
-        ["Sourcing", it.contract ? "Contract with " + esc(App.supplier(it.contract.supplierId).name) + " at " + money(it.contract.price) : P.requestTotal(r) >= REF.thresholds.rfx ? "RFx needed at this value" : "Direct buy allowed"]]) + "</div>") +
+        ["Sourcing", f.contract ? "Release of " + App.recLink(f.contract.id) : f.rfx ? "RFx " + App.recLink(f.rfx.id) : f.po ? esc(f.po.source) + " buy" : esc(App.route(r))]]) + "</div>") +
       section("Approvals", table(["Step", "Role", "Decision", "When", "Comment"], r.approvals.map(function (a, i) {
         return [String(i + 1), esc(P.roleLabel(a.role)), App.status(a.status === "Pending" ? (next === a && r.status === "Pending approval" ? "Pending approval" : "Pending") : a.status), day(a.at), esc(a.comment)];
       }), ""), "In order, set by value, item and budget") +
@@ -182,9 +184,9 @@
     }) + '<div class="page"><div class="secs">' +
       section("Details", '<div class="pad">' + dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status) + " · rating " + sp.quality], ["Item", esc(it.id + " " + it.name)],
         ["Quantity", n(po.qty) + " " + esc(it.uom) + (f.service && po.qty !== 1 ? "s" : "")], ["Deliver to", esc(po.site)], ["Cost center", esc(f.request.costCenter)], ["Requester", esc(f.request.requester)],
-        ["Source", esc(po.source) + (po.rfxId ? " " + App.recLink(po.rfxId) : "")], ["Payment terms", "Net " + sp.terms], ["Issued", day(po.createdAt)],
+        ["Source", esc(po.source) + (po.rfxId ? " " + App.recLink(po.rfxId) : "") + (po.contractId ? ", release of " + App.recLink(po.contractId) : "")], ["Payment terms", "Net " + sp.terms], ["Issued", day(po.createdAt)],
         ["Supplier email", esc(P.contactOf(s, sp.id)) || '<span class="muted">None saved</span>']]) + "</div>") +
-      section("Price", '<div class="pad">' + dl([["Unit price", money(po.unitPrice) + " " + (po.refPrice ? App.pill((varPct > 0 ? varPct + "% above " : varPct < 0 ? Math.abs(varPct) + "% below " : "Equal to ") + (it.contract ? "contract " : "standard ") + money(po.refPrice), varPct > 10 ? "bad" : varPct > 0 ? "warn" : "ok") : "")],
+      section("Price", '<div class="pad">' + dl([["Unit price", money(po.unitPrice) + " " + (po.refPrice ? App.pill((varPct > 0 ? varPct + "% above " : varPct < 0 ? Math.abs(varPct) + "% below " : "Equal to ") + (po.contractId ? "contract " : "standard ") + money(po.refPrice), varPct > 10 ? "bad" : varPct > 0 ? "warn" : "ok") : "")],
         ["Landed unit", money(P.landedUnit(po.unitPrice, po.tariffPct, po.freight)) + ' <span class="muted">tariff ' + (po.tariffPct || 0) + "%, freight " + money(po.freight || 0) + "</span>"],
         ["Landed value", money(P.poLanded(po))], ["Price reason", esc(po.varianceReason)]]) + "</div>" +
         (f.rfx ? table(["Supplier", "#Landed", "#Lead", "#Score"], P.scoreRFx(f.rfx, s, App.now()).map(function (q) {
@@ -258,9 +260,37 @@
       section("History", '<div class="pad">' + history([i.id]) + "</div>", "From the audit trail") + "</div></div>";
   }
 
+  // A contract stands apart from any one request, so its page has no document flow. It lists its releases instead.
+  function contractPage(c) {
+    var s = App.state, sp = App.supplier(c.supplierId), st = P.contractStatus(s, c, App.today());
+    return band({ home: "contracts", id: c.id, title: c.id, flow: null,
+      pills: App.status(st.status) + (st.endsSoon ? " " + App.pill("Ends in " + st.daysLeft + " d", "warn") : ""),
+      sub: esc(sp.name + " · " + c.title + " · " + c.start + " to " + c.end),
+      facts: [["Cap", money(c.cap)], ["Released", money(st.released)], ["Received", money(st.received)], ["Invoiced", money(st.invoiced)],
+        ["Remaining", money(Math.max(0, st.remaining)) + (st.warn ? ' <span class="pill warn">' + st.pct + "% used</span>" : "")], ["Ends", day(c.end)]]
+    }) + '<div class="page"><div class="secs">' +
+      section("Terms", '<div class="pad">' + dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status) + " · rating " + sp.quality], ["Title", esc(c.title)],
+        ["Period", day(c.start) + " to " + day(c.end)], ["Value cap", money(c.cap)], ["Basis", esc(c.basis)], ["Drafted by", esc(P.roleLabel(c.by)) + ", " + day(c.createdAt)]]) + "</div>") +
+      section("Agreed rates", table(["Item", "Unit", "#Rate", "#Standard"], c.lines.map(function (l) {
+        var it = App.item(l.itemId); return [esc(it.id + " " + it.name), esc(it.uom), money(l.price), money(it.stdPrice)];
+      }), "")) +
+      (c.status === "Approved" ? section("Consumption", '<div class="pad">' + App.contractBar(c) + "</div>" +
+        table(["Release", "Item", "#Quantity", "#Value", "Status"], st.pos.map(function (po) {
+          return [App.recLink(po.id), esc(po.itemId), n(po.qty), money(po.qty * po.unitPrice), App.status(P.poStatus(s, po))];
+        }), "No releases yet."), "Each PO from this contract is a release", true) : "") +
+      section("Approval", table(["Approver", "Status", "Date", "Note"], c.approvals.map(function (a) {
+        return [esc(P.roleLabel(a.role)), App.status(a.status === "Pending" ? (c.status === "Pending approval" && c.approvals.find(function (x) { return x.status === "Pending"; }) === a ? "Waiting" : "Not yet") : a.status), day(a.at), esc(a.note)];
+      }), ""), "Director, plus the Executive from " + money(REF.thresholds.executive).replace(/\.00$/, "")) +
+      section("History", '<div class="pad">' + history([c.id].concat(st.pos.map(function (po) { return po.id; }))) + "</div>", "This contract and its releases") + "</div></div>";
+  }
+
   App.recordPage = function (id) {
-    var f = App.isRecordId(id) ? P.docFlow(App.state, id) : null;
     var kind = id.split("-")[0];
+    if (kind === "CT") {
+      var c = (App.state.contracts || []).find(function (x) { return x.id === id; });
+      return c ? contractPage(c) : '<div class="band"><h2>' + esc(id) + ' not found</h2><p class="bandsub">There is no contract with that number in this workspace.</p></div>';
+    }
+    var f = App.isRecordId(id) ? P.docFlow(App.state, id) : null;
     if (!f || (kind === "GRN" && !App.state.grns.some(function (g) { return g.id === id; })) || (kind === "INV" && !App.state.invoices.some(function (x) { return x.id === id; })) ||
         (kind === "SES" && !(App.state.ses || []).some(function (x) { return x.id === id; }))) {
       return '<div class="band"><h2>' + esc(id) + ' not found</h2><p class="bandsub">There is no record with that number in this workspace. It may be from before a Reset demo.</p></div>';

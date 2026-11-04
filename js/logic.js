@@ -49,8 +49,8 @@
       docs[sp.id] = { quality: "9999-12-31", origin: "9999-12-31", subtier: "9999-12-31" };
     });
     return {
-      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], audit: [], docs: docs, contacts: {}
+      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000 },
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], audit: [], docs: docs, contacts: {}
     };
   }
 
@@ -95,7 +95,8 @@
   };
   var quoteLanded = function (q) { return landedUnit(q.unitPrice, q.tariffPct, q.freight); };
   var poLanded = function (po) { return cents(po.qty * landedUnit(po.unitPrice, po.tariffPct, po.freight)) / 100; };
-  var refPrice = function (it) { return it.contract ? it.contract.price : it.stdPrice; };
+  // Standard price of an item. With an active contract the contract rate is the reference instead (see refPriceAt).
+  var refPrice = function (it) { return it.stdPrice; };
   var nextId = function (s, key, prefix) { s.seq[key] += 1; return prefix + "-" + s.seq[key]; };
   function log(s, now, role, entity, action, note) {
     s.audit.push({ at: now, role: role, entity: entity, action: action, note: note || "" });
@@ -443,12 +444,156 @@
     return x;
   }
 
+  // ---------- 2c. contracts ----------
+  // A rate contract fixes a supplier and a price per item for a period, up to a value cap. Each PO issued from it is a
+  // release and uses up part of the cap. The Buyer creates it; the Director approves it, and the Executive too from
+  // the executive threshold, the same ladder as an award.
+  var ctOf = function (s) { if (!s.contracts) s.contracts = []; if (!s.seq.CT) s.seq.CT = 8000; return s.contracts; };
+  var getCT = function (s, id) { return byId(ctOf(s), id, "Contract"); };
+  var CT_WARN_DAYS = 60;
+
+  function contractChain(cap) { return cap >= TH.executive ? ["director", "executive"] : ["director"]; }
+
+  // Value released (POs), received or accepted, and invoiced against a contract.
+  function contractUse(s, c) {
+    var pos = s.pos.filter(function (po) { return po.contractId === c.id && !po.cancelled; });
+    var released = 0, received = 0, invoiced = 0;
+    pos.forEach(function (po) {
+      released += po.qty * po.unitPrice;
+      received += grnTotals(s, po.id).accepted * po.unitPrice;
+      invoiced += sum(s.invoices.filter(function (i) { return i.poId === po.id && (i.status === "Matched" || i.status === "Paid"); }),
+        function (i) { return i.qty * i.unitPrice; });
+    });
+    var r2 = function (n) { return Math.round(n * 100) / 100; };
+    released = r2(released);
+    return { pos: pos, released: released, received: r2(received), invoiced: r2(invoiced), remaining: r2(c.cap - released),
+      pct: c.cap ? Math.round(100 * released / c.cap) : 0 };
+  }
+
+  // Where a contract stands on a date. status: Pending approval, Rejected, Not started, Active, Used up or Expired.
+  function contractStatus(s, c, today) {
+    var u = contractUse(s, c), st;
+    if (c.status === "Pending approval" || c.status === "Rejected") st = c.status;
+    else if (u.remaining <= 0.005) st = "Used up";
+    else if (today > c.end) st = "Expired";
+    else if (today < c.start) st = "Not started";
+    else st = "Active";
+    var daysLeft = daysBetween(today, c.end);
+    return Object.assign(u, { status: st, daysLeft: daysLeft,
+      warn: st === "Active" && u.pct >= (REF.serviceWarnPct || 80), endsSoon: st === "Active" && daysLeft <= CT_WARN_DAYS });
+  }
+
+  // The active contract that covers an item on a date, with its line, or null.
+  function contractFor(s, itemId, today) {
+    var hit = null;
+    ctOf(s).some(function (c) {
+      var line = c.lines.find(function (l) { return l.itemId === itemId; });
+      if (line && contractStatus(s, c, today).status === "Active") { hit = { contract: c, line: line }; return true; }
+      return false;
+    });
+    return hit;
+  }
+  // The price a PO is compared with: the active contract rate if there is one, else the standard price.
+  function refPriceAt(s, itemId, today) { var h = contractFor(s, itemId, today); return h ? h.line.price : item(itemId).stdPrice; }
+
+  function createContract(s, role, now, f) {
+    need(role, ["buyer"]);
+    var today = dateOf(now), sp = supplier(f.supplierId || fail("Choose a supplier."));
+    var title = (f.title || "").trim();
+    if (title.length < 5) fail("Give the contract a short title, such as the scope it covers.");
+    if (sp.status !== "Qualified") fail("Contracts need a qualified supplier. " + sp.name + " is " + sp.status.toLowerCase() + ".");
+    var lines = (f.lines || []).filter(function (l) { return l && l.itemId; }).map(function (l) { return { itemId: l.itemId, price: Number(l.price) }; });
+    if (!lines.length) fail("Add at least one item with its agreed price.");
+    var seen = {};
+    lines.forEach(function (l) {
+      var it = item(l.itemId);
+      if (seen[it.id]) fail(it.id + " is on the contract twice.");
+      seen[it.id] = true;
+      if (sp.categories.indexOf(it.category) < 0) fail(sp.name + " does not supply " + it.category + ".");
+      if (!(l.price > 0) || Math.round(l.price * 100) / 100 !== l.price) fail("Enter the agreed price for " + it.id + ", to the cent.");
+    });
+    if (!validDate(f.start) || !validDate(f.end)) fail("Enter the start and end dates.");
+    if (f.end <= f.start) fail("The end date must be after the start date.");
+    if (f.end < today) fail("The end date has already passed.");
+    var cap = Number(f.cap);
+    if (!(cap > 0)) fail("Enter the value cap, the most that can be released on this contract.");
+    // One contract per item at a time, unless the other one is used up.
+    ctOf(s).forEach(function (c) {
+      if (c.status === "Rejected" || c.start > f.end || c.end < f.start) return;
+      var both = c.lines.filter(function (l) { return seen[l.itemId]; });
+      if (both.length && contractUse(s, c).remaining > 0.005) {
+        fail(both[0].itemId + " is already on " + c.id + " from " + c.start + " to " + c.end + ". Start the new contract after " + c.end + ".");
+      }
+    });
+    var cats = Array.from(new Set(lines.map(function (l) { return item(l.itemId).category; })));
+    cats.forEach(function (cat) {
+      var block = blockingDocs(docIssues(s, sp.id, today, cat));
+      if (block.length) fail(sp.name + " cannot get a contract: " + block.map(docText).join(", ") + ". Quality must record the renewal first.");
+    });
+    var c = { id: nextId(s, "CT", "CT"), supplierId: sp.id, title: title, lines: lines, start: f.start, end: f.end, cap: cap,
+      basis: (f.basis || "").trim(), status: "Pending approval", by: role, createdAt: now,
+      approvals: contractChain(cap).map(function (r) { return { role: r, status: "Pending", at: null, note: "" }; }) };
+    ctOf(s).push(c);
+    log(s, now, role, c.id, "Contract drafted with " + sp.name + ": " + title,
+      fmt(cap) + " cap, " + c.start + " to " + c.end + ", " + lines.map(function (l) { return l.itemId + " at " + fmt(l.price); }).join(", ") +
+      ". Approval: " + c.approvals.map(function (a) { return roleLabel(a.role); }).join(" then ") + ".");
+    return c;
+  }
+
+  function decideContract(s, role, now, id, decision, note) {
+    need(role, ["director", "executive"]);
+    var c = getCT(s, id);
+    if (c.status !== "Pending approval") fail("This contract is already " + c.status.toLowerCase() + ".");
+    var step = c.approvals.find(function (a) { return a.status === "Pending"; });
+    if (step.role !== role) {
+      fail(c.approvals.some(function (a) { return a.role === role; })
+        ? "The next approval belongs to the " + roleLabel(step.role) + ", not the " + roleLabel(role) + "."
+        : "This contract is under " + fmt(TH.executive) + ", so the Executive does not approve it.");
+    }
+    var n = (note || "").trim();
+    if (decision === "Rejected") {
+      if (n.length < 5) fail("Give a reason, so the Buyer knows what to change.");
+      step.status = "Rejected"; step.at = now; step.note = n; c.status = "Rejected";
+      log(s, now, role, c.id, "Contract rejected", n);
+      return c;
+    }
+    if (decision !== "Approved") fail("Choose Approve or Reject.");
+    step.status = "Approved"; step.at = now; step.note = n;
+    var next = c.approvals.find(function (a) { return a.status === "Pending"; });
+    if (!next) c.status = "Approved";
+    log(s, now, role, c.id, "Contract approved at " + roleLabel(role) + " step", (n ? n + ". " : "") +
+      (next ? "Now waits for the " + roleLabel(next.role) + "." : "Releases can be issued from " + c.start + "."));
+    return c;
+  }
+
+  // Saved data from before contracts had their own records kept the contract terms on the items. Turn those terms
+  // into approved contracts, link the POs already issued from them, and leave newer data alone.
+  var LEGACY_CONTRACTS = [
+    { supplierId: "meridian", title: "MRO spares rate contract", cap: 40000, lines: [["MR-402", 9.10], ["MR-403", 5.90], ["MR-404", 92.00]] },
+    { supplierId: "keystone", title: "Maintenance technician labor", cap: 60000, lines: [["SV-501", 66.00]] }
+  ];
+  function migrateContracts(s, now) {
+    if (s.contracts) return false;
+    ctOf(s);
+    var today = dateOf(now);
+    LEGACY_CONTRACTS.forEach(function (d) {
+      var c = { id: nextId(s, "CT", "CT"), supplierId: d.supplierId, title: d.title, start: addDays(today, -180), end: addDays(today, 185), cap: d.cap,
+        lines: d.lines.map(function (l) { return { itemId: l[0], price: l[1] }; }), basis: "Carried over from earlier saved data",
+        status: "Approved", by: "buyer", createdAt: now, approvals: [{ role: "director", status: "Approved", at: now, note: "Carried over" }] };
+      s.contracts.push(c);
+      s.pos.forEach(function (po) {
+        if (po.source === "Contract" && po.supplierId === c.supplierId && c.lines.some(function (l) { return l.itemId === po.itemId; })) po.contractId = c.id;
+      });
+    });
+    return true;
+  }
+
   // ---------- 3. purchase order ----------
   function createPO(s, role, now, reqId, f) {
     need(role, ["buyer"]);
     f = f || {};
     var r = getReq(s, reqId), it = item(r.itemId);
-    var supId, price, lead, rfxId = null, source, tariff = 0, freight = 0;
+    var supId, price, lead, rfxId = null, source, tariff = 0, freight = 0, contractId = null;
     if (r.status === "Awarded") {
       var x = getRfx(s, r.rfxId);
       var q = x.quotes.find(function (z) { return z.supplierId === x.award.supplierId; });
@@ -459,12 +604,17 @@
       tariff = q.tariffPct || 0; freight = q.freight || 0;
     } else if (r.status === "Approved") {
       lead = f.leadDays === undefined || f.leadDays === "" ? 7 : Number(f.leadDays);
-      if (it.contract) {
-        supId = it.contract.supplierId; price = it.contract.price; source = "Contract";
+      var ct = contractFor(s, it.id, dateOf(now));
+      if (ct) {
+        supId = ct.contract.supplierId; price = ct.line.price; source = "Contract"; contractId = ct.contract.id;
+        var left = contractUse(s, ct.contract).remaining, value = cents(r.qty * price) / 100;
+        if (value > left + 0.005) {
+          fail("This release is " + fmt(value) + " but " + ct.contract.id + " has only " + fmt(left) + " left. Raise an RFx for it instead, or set up a new contract.");
+        }
       } else {
         source = "Direct";
         if (requestTotal(r) >= TH.rfx) {
-          fail("This request is " + fmt(requestTotal(r)) + " with no contract. Values of " + fmt(TH.rfx) + " or more need an RFx.");
+          fail("This request is " + fmt(requestTotal(r)) + " with no active contract. Values of " + fmt(TH.rfx) + " or more need an RFx.");
         }
         supId = f.supplierId; price = Number(f.unitPrice);
         if (!supId) fail("Choose a supplier.");
@@ -491,10 +641,10 @@
       fail("PO value " + fmt(total) + " is more than " + Math.round(TH.poOverrun * 100) + "% above the approved PR value " +
         fmt(approved) + ". The requester must revise the request and get it approved again.");
     }
-    var ref = refPrice(it), varPct = Math.round(100 * (price - ref) / ref);
+    var refCt = contractFor(s, it.id, dateOf(now)), ref = refCt ? refCt.line.price : it.stdPrice, varPct = Math.round(100 * (price - ref) / ref);
     var vReason = (f.varianceReason || "").trim();
     if (price > ref * (1 + TH.priceVariance) + 0.0001 && vReason.length < 10) {
-      fail("PO price " + fmt(price) + " is " + varPct + "% above the " + (it.contract ? "contract" : "standard") + " price " + fmt(ref) +
+      fail("PO price " + fmt(price) + " is " + varPct + "% above the " + (refCt ? "contract" : "standard") + " price " + fmt(ref) +
         ". Add a reason (at least a short sentence) before issuing it.");
     }
     var po = {
@@ -502,11 +652,11 @@
       qty: r.qty, unitPrice: price, tariffPct: tariff, freight: freight, refPrice: ref, varianceReason: vReason,
       site: r.site, needBy: r.needBy,
       promisedDate: addDays(dateOf(now), lead), confirmed: false, cancelled: false,
-      source: source, createdAt: now
+      source: source, contractId: contractId, createdAt: now
     };
     s.pos.push(po);
     r.status = "Ordered"; r.poId = po.id;
-    log(s, now, role, po.id, "PO issued to " + supplier(supId).name + " (" + source + ")",
+    log(s, now, role, po.id, "PO issued to " + supplier(supId).name + " (" + (contractId ? "release of " + contractId : source) + ")",
       r.qty + " x " + it.id + " at " + fmt(price) + " = " + fmt(total) +
       (tariff || freight ? ", landed " + fmt(poLanded(po)) + " with " + tariff + "% tariff" : "") +
       ". Promised " + po.promisedDate + (vReason ? ". Price reason: " + vReason : ""));
@@ -980,6 +1130,7 @@
     if (!po && req.poId) po = getPO(s, req.poId);
     return {
       kind: kind, id: id, request: req, rfx: x, po: po,
+      contract: po && po.contractId ? ctOf(s).find(function (c) { return c.id === po.contractId; }) || null : null,
       grns: po ? s.grns.filter(function (r) { return r.poId === po.id; }) : [],
       ses: po ? sesOf(s).filter(function (r) { return r.poId === po.id; }) : [], service: po ? isService(po) : !!item(req.itemId).service,
       invoices: po ? s.invoices.filter(function (r) { return r.poId === po.id; }) : []
@@ -1019,6 +1170,10 @@
     }).length, "rfx");
     var openPOs = s.pos.filter(function (po) { return ["Issued", "Confirmed", "Partially received"].indexOf(poStatus(s, po)) >= 0; });
     var invFor = function (who) { return s.invoices.filter(function (i) { return invOwners(i).indexOf(who) >= 0; }).length; };
+    add("Contracts waiting for your approval", ctOf(s).filter(function (c) {
+      var st = c.status === "Pending approval" && c.approvals.find(function (a) { return a.status === "Pending"; });
+      return st && st.role === role;
+    }).length, "contracts");
     add("Service entries waiting for your release", sesOf(s).filter(function (e) { return nextReleaser(e) === role; }).length, "services");
     if (["manager", "director", "executive"].indexOf(role) >= 0) add("Invoices waiting on your service release", invFor(role), "invoices");
     if (role === "requester") {
@@ -1045,6 +1200,9 @@
       add("POs not yet confirmed by supplier", s.pos.filter(function (po) { return poStatus(s, po) === "Issued"; }).length, "pos");
       add("POs to chase with the supplier", expediteList(s, now || new Date().toISOString()).length, "expedite");
       add("Invoice exceptions on your desk", invFor("buyer"), "invoices");
+      var cts = ctOf(s).map(function (c) { return contractStatus(s, c, today); });
+      add("Contracts ending within " + CT_WARN_DAYS + " days", cts.filter(function (c) { return c.endsSoon; }).length, "contracts");
+      add("Contracts over " + (REF.serviceWarnPct || 80) + "% used", cts.filter(function (c) { return c.warn; }).length, "contracts");
       add("Service POs over " + (REF.serviceWarnPct || 80) + "% used", s.pos.filter(function (po) {
         return isService(po) && !po.cancelled && poStatus(s, po) !== "Closed" && serviceStatus(s, po).warn;
       }).length, "services");
@@ -1110,6 +1268,8 @@
     grnTotals: grnTotals, postGRN: postGRN, releaseHold: releaseHold,
     isService: isService, postService: postService, decideService: decideService, serviceStatus: serviceStatus,
     serviceChain: serviceChain, serviceReleases: releasesOf, nextReleaser: nextReleaser,
+    createContract: createContract, decideContract: decideContract, contractChain: contractChain, contractStatus: contractStatus,
+    contractFor: contractFor, refPriceAt: refPriceAt, migrateContracts: migrateContracts, CT_WARN_DAYS: CT_WARN_DAYS,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
     rejectInvoice: rejectInvoice, payInvoice: payInvoice, invOwners: invOwners,

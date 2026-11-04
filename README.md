@@ -15,7 +15,8 @@ Switch between nine roles to play each person in the chain. A record created in 
 | Request | A requester asks for an item | Approval route set by value, item type and budget |
 | PR | Issued after the last approval | Approvals must happen in order by the right role |
 | RFx | Invite suppliers, collect quotes, technical evaluation by the user side, score acceptable offers on landed cost, Buyer recommends, leadership approves | Two bidders or a sole source reason. Offers that fail the technical check, unqualified suppliers and suppliers with expired documents cannot win. Expired quotes cannot be awarded. Off ranking awards need a written reason. Director approves every award; the Executive too from $50,000 or for a single bid, a conditional supplier or an off ranking pick |
-| PO | Issue from an award, a contract or a direct buy | RFx required at $10,000 or more with no contract. PO capped at 10% over the approved value. A price more than 10% above the contract or standard price needs a reason |
+| Contract | Buyer drafts a rate contract: supplier, agreed prices, dates and a value cap | Director approves, plus the Executive from $50,000. Qualified supplier with current documents. One contract per item at a time |
+| PO | Issue from an award, as a release from an active contract, or as a direct buy | RFx required at $10,000 or more with no active contract. A release must fit in what is left of the contract cap. PO capped at 10% over the approved value. A price more than 10% above the contract or standard price needs a reason |
 | GRN | Warehouse posts accepted, rejected or held goods | No over receipt. Held goods wait for Quality |
 | Service entry | Requester records monthly service work from the site log, approvers release it by value | Manager always, Director from $5,000, Executive from $10,000, in order. Cannot pass the ordered quantity. Warns above 80% used. Only released service can be invoiced |
 | Invoice | Exact three way match against PO and receipts or accepted service | Price and quantity must agree. Duplicates are caught. Each gap goes to a named fix owner |
@@ -32,7 +33,8 @@ Approval route: Manager always. Quality for items flagged for inspection. Engine
 - **Landed cost.** Quotes carry a tariff percentage and freight per unit. Ranking uses landed cost, so a tariff can change the winner.
 - **Quote validity.** Quotes expire. An expired quote must be revalidated before an award or PO.
 - **Supplier documents.** Quality certificate, origin declaration and (for raw materials and components) a sub tier disclosure, each with an expiry date. Expired or missing documents block awards and POs until Quality records a renewal on the Suppliers tab.
-- **Price against reference.** Every PO is compared with the contract or standard price. Above 10% it needs a written reason.
+- **Contracts and releases.** A rate contract fixes the supplier and price for some items, for a period, up to a value cap, the way plants run annual rate contracts. The Buyer drafts it on the Contracts screen. The Director approves it, plus the Executive from $50,000. Requests for contract items still go through approval for budget control. Once approved, the Buyer releases them from the contract at the agreed rate, with no RFx. Each release is a normal PO, so receipts, service entries, invoices and the three way match work as before. The contract shows released, received, invoiced and remaining value, warns above 80% used and within 60 days of its end, and blocks a release that would pass its cap. When it ends or the cap is used up, its items go back to normal sourcing. A blanket order is the same idea, so contracts cover both goods and services. There is no contract amendment yet: to extend one, draft a new contract that starts after the old one ends.
+- **Price against reference.** Every PO is compared with the active contract rate or the standard price. Above 10% it needs a written reason.
 
 - **Expedite and email drafts.** A ranked list of overdue, late, at risk and unconfirmed POs. The Buyer gets an editable chase message built from the PO, and opens it in their own mail program, Gmail or Outlook, copies it, or downloads a draft file. The app does not send mail and cannot tell if it was sent, so the audit trail says "drafted", never "sent". Sending from the app itself would need a small backend and is not built.
 
@@ -92,24 +94,24 @@ GitHub runs every suite below on each pull request and each push to main (`.gith
 node tests/logic.test.js
 ```
 
-runs 65 checks on the workflow engine, and
+runs 70 checks on the workflow engine, and
 
 ```
 node tests/csv.test.js
 ```
 
-runs 28 checks on CSV reading, writing, export and import, and `node tests/search.test.js` runs 13 checks on search. The screen tests drive the real page in a simulated browser and need jsdom:
+runs 28 checks on CSV reading, writing, export and import, and `node tests/search.test.js` runs 14 checks on search. The screen tests drive the real page in a simulated browser and need jsdom:
 
 ```
 mkdir ../jsdom-tmp && cd ../jsdom-tmp && npm install jsdom && cd -
-for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard ui-services; do node tests/$f.js "$PWD/../jsdom-tmp"; done
+for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-expedite ui-e2e ui-csv ui-records ui-shell ui-search ui-roles ui-dashboard ui-services ui-contracts; do node tests/$f.js "$PWD/../jsdom-tmp"; done
 ```
 
-`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard. `ui-search.js` covers the search panel. `ui-roles.js` covers the sidebar groups, view only lines and each role's default slice. `ui-dashboard.js` covers the charts, their tooltips and clicks, and the oversight home. `ui-services.js` covers service entries, the release chain, the usage warning and the clearing list.
+`ui-e2e.js` takes one request through all six stages to a paid invoice using only the screens. `ui-controls.js` covers budgets, landed cost, quote validity, supplier documents and price variance. `ui-csv.js` covers the CSV bar, the import panel and a real file pick. `ui-records.js` covers the sidebar, record pages, document flow links and links in the address. `ui-shell.js` covers the Working as menu, by mouse and keyboard. `ui-search.js` covers the search panel. `ui-roles.js` covers the sidebar groups, view only lines and each role's default slice. `ui-dashboard.js` covers the charts, their tooltips and clicks, and the oversight home. `ui-services.js` covers service entries, the release chain, the usage warning and the clearing list. `ui-contracts.js` covers drafting and approving contracts, releases from a contract and the return to normal sourcing.
 
 ## Natural next steps
 
-- Contracts with dates and remaining volume, blanket orders and releases.
+- Contract amendments: extend the end date or raise the cap with a fresh approval.
 - Invoice tolerance rules.
 - Supplier scorecards built from receipt and invoice history.
 - Sign in, and a shared backend so more than one person can use the same data.

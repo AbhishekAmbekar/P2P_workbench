@@ -15,10 +15,10 @@ const band = () => $("#view .band").textContent;
 
 click($("#resetBtn"));
 
-test("Accounts Payable works on invoices and follows POs, receipts and suppliers", () => {
+test("Accounts Payable works on invoices and follows contracts, POs, receipts and suppliers", () => {
   role("ap");
   check(group("Your work").join() === "invoices", "work " + group("Your work"));
-  check(group("View only").join() === "pos,grn,services,suppliers,audit", "view " + group("View only"));
+  check(group("View only").join() === "contracts,pos,grn,services,suppliers,audit", "view " + group("View only"));
   check($('#tabs .navmore'), "more screens toggle");
   check($$("#tabs button.more.hid").length === 3, "three folded screens");
 });
@@ -44,9 +44,9 @@ test("a role's own screens show no view only line", () => {
   check(band().indexOf("View only") < 0, "Buyer fixes price gaps here");
 });
 
-test("the VP follows everything and works only on approvals and service releases", () => {
+test("the VP follows everything and works only on approvals and releases", () => {
   role("executive");
-  check(group("Your work").join() === "requests,rfx,services", "work, including service release " + group("Your work"));
+  check(group("Your work").join() === "requests,rfx,contracts,services", "work, including contract approval and service release " + group("Your work"));
   check(group("View only").length === 6, "view " + group("View only"));
   check(!$("#tabs .navmore"), "nothing folded for the VP");
   tab("pos");
@@ -56,7 +56,7 @@ test("the VP follows everything and works only on approvals and service releases
 test("the Manager follows every screen like the Director and VP, and gets Oversight", () => {
   role("manager");
   check(group("Your work").join() === "requests,services", "work, including service release " + group("Your work"));
-  check(group("View only").length === 7, "view " + group("View only"));
+  check(group("View only").length === 8, "view " + group("View only"));
   role("director"); const dir = group("Your work").concat(group("View only")).sort().join();
   role("manager");
   check(group("Your work").concat(group("View only")).sort().join() === dir, "same screens as the Director");
@@ -79,9 +79,9 @@ test("each role opens Requests on its own slice", () => {
 test("a filter picked by hand stays until the role changes", () => {
   role("manager"); tab("requests");
   clickText("#view button.small", "All");
-  check(rows().length === 16);
+  check(rows().length === 17);
   tab("pos"); tab("requests");
-  check(rows().length === 16, "kept");
+  check(rows().length === 17, "kept");
   role("requester"); role("manager");
   check(rows().join() === "REQ-1012", "back to the role default");
 });
@@ -90,9 +90,9 @@ test("the Warehouse opens Purchase orders on what is still due in", () => {
   role("warehouse"); tab("pos");
   check(rows().sort().join() === "PO-4001,PO-4003,PO-4006,PO-4007", "open " + rows());
   clickText("#view button.small", "All");
-  check(rows().length === 9);
+  check(rows().length === 10);
   role("buyer"); tab("pos");
-  check(rows().length === 9, "buyer sees all");
+  check(rows().length === 10, "buyer sees all");
   clickText("#view button.small", "Late or at risk");
   check(rows().sort().join() === "PO-4001,PO-4006,PO-4007", "risk " + rows());
 });

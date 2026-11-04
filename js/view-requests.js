@@ -70,7 +70,9 @@
     var chain = P.buildChain(it, total, bc.over).map(function (a) { return P.roleLabel(a.role); }).join(", then ");
     var budget = bc.found ? " " + form.elements.costCenter.value + " would be at " + bc.pctAfter + "% of its " + App.money(bc.budget).replace(/\.\d\d$/, "") + " budget" +
       (bc.over ? ", so the Executive must also approve." : ".") : "";
-    var sourcing = it.contract ? "A contract price exists, so the Buyer can raise a PO directly."
+    var ct = P.contractFor(App.state, it.id, App.today());
+    var sourcing = ct && qty * ct.line.price <= P.contractStatus(App.state, ct.contract, App.today()).remaining + 0.005
+      ? "Contract " + ct.contract.id + " covers this item at " + App.money(ct.line.price) + ", so the Buyer releases it from the contract with no RFx."
       : total >= REF.thresholds.rfx ? "At this value the Buyer must run an RFx before ordering."
       : "Below " + App.money(REF.thresholds.rfx) + " the Buyer may order directly from a qualified supplier.";
     return "Value " + App.money(total) + ". Approvals: " + chain + "." + budget + " " + sourcing;
@@ -143,9 +145,10 @@
       acts += '<div class="actions"><button class="ghost" data-act="reqCancel" data-id="' + r.id + '">Cancel this request</button></div>';
     }
     if (r.status === "Approved") {
-      acts += '<div class="note">Approved. Next step is sourcing. ' + (it.contract
-        ? "A contract price exists for this item, so the Buyer can raise a PO directly."
-        : total >= REF.thresholds.rfx ? "The value is at or above " + App.money(REF.thresholds.rfx) + " with no contract, so it needs an RFx."
+      var route = App.route(r);
+      acts += '<div class="note">Approved. Next step is sourcing. ' + (route.indexOf("Contract") === 0
+        ? "The Buyer releases it from " + route.slice(9) + " at the agreed rate, with no RFx."
+        : total >= REF.thresholds.rfx ? "The value is at or above " + App.money(REF.thresholds.rfx) + " with no active contract, so it needs an RFx."
         : "The Buyer can run an RFx or order directly from a qualified supplier.") + "</div>" +
         '<div class="actions"><button class="ghost" data-act="goto" data-arg="rfx" data-id="' + r.id + '">Go to RFx</button>' +
         '<button class="ghost" data-act="goto" data-arg="pos" data-id="' + r.id + '">Go to purchase orders</button></div>';

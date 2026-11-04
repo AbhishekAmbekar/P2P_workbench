@@ -38,7 +38,7 @@ test("an awarded RFx creates a PO with the awarded supplier and price", () => {
   click(btn("Create PO"));
   check(text().indexOf("Awarded to Brightpath") >= 0 || text().indexOf("Brightpath Electronics at $219.00") >= 0, "award details missing");
   submit($('form[data-form="poCreate"]'));
-  check(toastText().indexOf("PO-4010") >= 0, "toast: " + toastText());
+  check(toastText().indexOf("PO-4011") >= 0, "toast: " + toastText());
   check(text().indexOf("Brightpath Electronics") >= 0 && text().indexOf("$13,140.00") >= 0, "PO detail wrong");
   check(text().indexOf("not confirmed") >= 0);
 });
@@ -101,7 +101,7 @@ test("a contract buy takes its supplier and price from the contract", () => {
   const rowBtn = $$("#view table")[0].querySelectorAll("tr");
   const r = [...rowBtn].find(x => x.textContent.indexOf("Grease") >= 0);
   click(r.querySelector("button"));
-  check(text().indexOf("Source: contract") >= 0 && text().indexOf("Meridian MRO") >= 0, "contract details missing");
+  check(text().indexOf("Source: release of CT-8001") >= 0 && text().indexOf("Meridian MRO") >= 0 && text().indexOf("No RFx is needed") >= 0, "contract details missing");
   check(!$('select[name="supplierId"]'), "no supplier choice on a contract buy");
 });
 

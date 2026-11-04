@@ -8,7 +8,7 @@
     thresholds: {
       director: 5000,    // requests at or above this also need the Director
       executive: 50000,  // requests at or above this also need the Executive
-      rfx: 10000,        // direct buys at or above this need an RFx unless a contract exists
+      rfx: 10000,        // direct buys at or above this need an RFx unless an active contract covers the item
       poOverrun: 0.10,   // a PO may not exceed the approved PR value by more than this
       priceVariance: 0.10 // a PO priced this far above the contract or standard price needs a written reason
     },
@@ -64,20 +64,21 @@
     // This is about focus, not permission: the engine rules decide who can act. Screens in neither list sit under "More screens".
     focus: {
       requester:   { work: ["requests", "rfx", "services"], view: ["pos", "grn", "audit"] },
-      manager:     { work: ["requests", "services"], view: ["rfx", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      manager:     { work: ["requests", "services"], view: ["rfx", "contracts", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
       quality:     { work: ["requests", "rfx", "grn", "suppliers"], view: ["pos", "audit"] },
       engineering: { work: ["requests", "rfx"], view: ["pos", "audit"] },
-      director:    { work: ["requests", "rfx", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      executive:   { work: ["requests", "rfx", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      buyer:       { work: ["rfx", "pos", "expedite", "suppliers", "invoices"], view: ["requests", "grn", "services", "audit"] },
+      director:    { work: ["requests", "rfx", "contracts", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      executive:   { work: ["requests", "rfx", "contracts", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      buyer:       { work: ["rfx", "contracts", "pos", "expedite", "suppliers", "invoices"], view: ["requests", "grn", "services", "audit"] },
       warehouse:   { work: ["grn"], view: ["pos", "invoices", "audit"] },
-      ap:          { work: ["invoices"], view: ["pos", "grn", "services", "suppliers", "audit"] }
+      ap:          { work: ["invoices"], view: ["contracts", "pos", "grn", "services", "suppliers", "audit"] }
     },
     // Who works on each screen, shown to roles that only view it.
     screenOwners: {
       requests: "The Requester raises requests here. Approvers decide on them in order.",
       rfx: "The Buyer runs sourcing here. The user side checks offers against the spec, and the Director approves awards.",
       pos: "The Buyer creates POs and keeps supplier dates and prices current.",
+      contracts: "The Buyer sets up rate contracts. The Director approves them, and the Executive too from $50,000. Each PO from a contract is a release that uses up its cap.",
       expedite: "The Buyer chases suppliers from here.",
       grn: "Receiving is done by the Warehouse. Quality decides what happens to held goods.",
       services: "The Requester records the service work from the site log and the supplier's timesheet. The Manager releases it, plus the Director from $5,000 and the Executive from $10,000.",
@@ -107,31 +108,31 @@
       { id: "northwind", name: "Northwind Compressor Care", categories: ["Services"], status: "Conditional", quality: 74, terms: 45 }
     ],
 
-    // contract: pre negotiated supplier and price, allows a direct PO at any value
+    // Contract prices are not here. They live on contracts (Contracts screen), which have dates and a value cap.
     items: [
-      { id: "RM-101", name: "Aluminum extrusion profile", category: "Raw materials", uom: "ea", stdPrice: 42.00, needsQuality: true, needsEngineering: false, contract: null },
-      { id: "PK-102", name: "Food grade laminate film", category: "Packaging", uom: "roll", stdPrice: 380.00, needsQuality: true, needsEngineering: false, contract: null },
-      { id: "RM-103", name: "Industrial solvent concentrate, 200 L drum", category: "Raw materials", uom: "drum", stdPrice: 1450.00, needsQuality: true, needsEngineering: false, contract: null },
-      { id: "CP-104", name: "Machined aluminum housing", category: "Components", uom: "ea", stdPrice: 215.00, needsQuality: false, needsEngineering: true, contract: null },
-      { id: "CP-201", name: "Steel support rail, 3 m", category: "Components", uom: "ea", stdPrice: 38.00, needsQuality: false, needsEngineering: false, contract: null },
-      { id: "CP-202", name: "Motor control board", category: "Components", uom: "ea", stdPrice: 640.00, needsQuality: false, needsEngineering: true, contract: null },
-      { id: "MR-203", name: "Pump seal overhaul kit", category: "MRO", uom: "kit", stdPrice: 910.00, needsQuality: false, needsEngineering: false, contract: null },
-      { id: "CP-301", name: "Power cable assembly", category: "Components", uom: "ea", stdPrice: 76.00, needsQuality: false, needsEngineering: true, contract: null },
-      { id: "CP-302", name: "Forged steel bracket", category: "Components", uom: "ea", stdPrice: 24.50, needsQuality: false, needsEngineering: false, contract: null },
-      { id: "CP-303", name: "Connector kit", category: "Components", uom: "kit", stdPrice: 11.80, needsQuality: false, needsEngineering: true, contract: null },
-      { id: "MR-401", name: "Hydraulic hose assembly, 1 in", category: "MRO", uom: "ea", stdPrice: 58.00, needsQuality: false, needsEngineering: false, contract: null },
-      { id: "MR-402", name: "Sealed bearing 6205", category: "MRO", uom: "ea", stdPrice: 9.40, needsQuality: false, needsEngineering: false, contract: { supplierId: "meridian", price: 9.10 } },
-      { id: "MR-403", name: "Cut resistant gloves", category: "MRO", uom: "pair", stdPrice: 6.20, needsQuality: false, needsEngineering: false, contract: { supplierId: "meridian", price: 5.90 } },
-      { id: "MR-404", name: "Grease cartridge, 400 g", category: "MRO", uom: "case", stdPrice: 96.00, needsQuality: false, needsEngineering: false, contract: { supplierId: "meridian", price: 92.00 } },
-      { id: "MR-405", name: "Fastener assortment M6 to M12", category: "MRO", uom: "kit", stdPrice: 84.00, needsQuality: false, needsEngineering: false, contract: null },
+      { id: "RM-101", name: "Aluminum extrusion profile", category: "Raw materials", uom: "ea", stdPrice: 42.00, needsQuality: true, needsEngineering: false },
+      { id: "PK-102", name: "Food grade laminate film", category: "Packaging", uom: "roll", stdPrice: 380.00, needsQuality: true, needsEngineering: false },
+      { id: "RM-103", name: "Industrial solvent concentrate, 200 L drum", category: "Raw materials", uom: "drum", stdPrice: 1450.00, needsQuality: true, needsEngineering: false },
+      { id: "CP-104", name: "Machined aluminum housing", category: "Components", uom: "ea", stdPrice: 215.00, needsQuality: false, needsEngineering: true },
+      { id: "CP-201", name: "Steel support rail, 3 m", category: "Components", uom: "ea", stdPrice: 38.00, needsQuality: false, needsEngineering: false },
+      { id: "CP-202", name: "Motor control board", category: "Components", uom: "ea", stdPrice: 640.00, needsQuality: false, needsEngineering: true },
+      { id: "MR-203", name: "Pump seal overhaul kit", category: "MRO", uom: "kit", stdPrice: 910.00, needsQuality: false, needsEngineering: false },
+      { id: "CP-301", name: "Power cable assembly", category: "Components", uom: "ea", stdPrice: 76.00, needsQuality: false, needsEngineering: true },
+      { id: "CP-302", name: "Forged steel bracket", category: "Components", uom: "ea", stdPrice: 24.50, needsQuality: false, needsEngineering: false },
+      { id: "CP-303", name: "Connector kit", category: "Components", uom: "kit", stdPrice: 11.80, needsQuality: false, needsEngineering: true },
+      { id: "MR-401", name: "Hydraulic hose assembly, 1 in", category: "MRO", uom: "ea", stdPrice: 58.00, needsQuality: false, needsEngineering: false },
+      { id: "MR-402", name: "Sealed bearing 6205", category: "MRO", uom: "ea", stdPrice: 9.40, needsQuality: false, needsEngineering: false },
+      { id: "MR-403", name: "Cut resistant gloves", category: "MRO", uom: "pair", stdPrice: 6.20, needsQuality: false, needsEngineering: false },
+      { id: "MR-404", name: "Grease cartridge, 400 g", category: "MRO", uom: "case", stdPrice: 96.00, needsQuality: false, needsEngineering: false },
+      { id: "MR-405", name: "Fastener assortment M6 to M12", category: "MRO", uom: "kit", stdPrice: 84.00, needsQuality: false, needsEngineering: false },
       // Services. The quantity is an estimate of hours, days, weeks or months. The price is the rate.
-      { id: "SV-501", name: "Maintenance technician labor, per man hour", category: "Services", uom: "hour", stdPrice: 68.00, needsQuality: false, needsEngineering: false, service: true, contract: { supplierId: "keystone", price: 66.00 } },
-      { id: "SV-502", name: "Mobile crane hire with operator, per day", category: "Services", uom: "day", stdPrice: 1450.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
-      { id: "SV-503", name: "Scaffold rental, erected and dismantled, per week", category: "Services", uom: "week", stdPrice: 520.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
-      { id: "SV-504", name: "Air compressor maintenance contract, per month", category: "Services", uom: "month", stdPrice: 2100.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
-      { id: "SV-505", name: "Gauge and instrument calibration, per instrument", category: "Services", uom: "instrument", stdPrice: 45.00, needsQuality: true, needsEngineering: false, service: true, contract: null },
-      { id: "SV-506", name: "Industrial cleaning crew, per shift", category: "Services", uom: "shift", stdPrice: 780.00, needsQuality: false, needsEngineering: false, service: true, contract: null },
-      { id: "SV-507", name: "Forklift rental with servicing, per month", category: "Services", uom: "month", stdPrice: 1150.00, needsQuality: false, needsEngineering: false, service: true, contract: null }
+      { id: "SV-501", name: "Maintenance technician labor, per man hour", category: "Services", uom: "hour", stdPrice: 68.00, needsQuality: false, needsEngineering: false, service: true },
+      { id: "SV-502", name: "Mobile crane hire with operator, per day", category: "Services", uom: "day", stdPrice: 1450.00, needsQuality: false, needsEngineering: false, service: true },
+      { id: "SV-503", name: "Scaffold rental, erected and dismantled, per week", category: "Services", uom: "week", stdPrice: 520.00, needsQuality: false, needsEngineering: false, service: true },
+      { id: "SV-504", name: "Air compressor maintenance contract, per month", category: "Services", uom: "month", stdPrice: 2100.00, needsQuality: false, needsEngineering: false, service: true },
+      { id: "SV-505", name: "Gauge and instrument calibration, per instrument", category: "Services", uom: "instrument", stdPrice: 45.00, needsQuality: true, needsEngineering: false, service: true },
+      { id: "SV-506", name: "Industrial cleaning crew, per shift", category: "Services", uom: "shift", stdPrice: 780.00, needsQuality: false, needsEngineering: false, service: true },
+      { id: "SV-507", name: "Forklift rental with servicing, per month", category: "Services", uom: "month", stdPrice: 1150.00, needsQuality: false, needsEngineering: false, service: true }
     ]
   };
 });

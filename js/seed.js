@@ -48,6 +48,31 @@
     var W = { wPrice: 50, wLead: 25, wQuality: 25 };
     var rfxArgs = function (type, invited) { return Object.assign({ type: type, invited: invited }, W); };
 
+    // Rate contracts. Each is drafted by the Buyer and approved by the Director, plus the Executive from $50,000.
+    function contract(off, f, approvers) {
+      var c = P.createContract(s, "buyer", T(off), f);
+      (approvers || ["director", "executive"]).forEach(function (role, i) {
+        if (c.status === "Pending approval") P.decideContract(s, role, T(off + 1 + i), c.id, "Approved", "");
+      });
+      return c;
+    }
+    // CT-8001: MRO spares, about half used.
+    contract(-200, { supplierId: "meridian", title: "MRO spares rate contract", cap: 9000, start: D(-200), end: D(165),
+      basis: "Annual negotiation, rates held from last year",
+      lines: [{ itemId: "MR-402", price: 9.10 }, { itemId: "MR-403", price: 5.90 }, { itemId: "MR-404", price: 92.00 }] });
+    // CT-8002: technician labor. Ends within 60 days and is over 80% used, so the Buyer should renew it.
+    contract(-150, { supplierId: "keystone", title: "Maintenance technician labor", cap: 30000, start: D(-150), end: D(40),
+      basis: "Rate card agreed for the maintenance season", lines: [{ itemId: "SV-501", price: 66.00 }] });
+    // CT-8003: scaffold rental. One release used the whole cap, so the next scaffold request needs normal sourcing.
+    contract(-92, { supplierId: "ridgeway", title: "Scaffold rental for the line 2 rebuild", cap: 4950, start: D(-90), end: D(275),
+      basis: "Fixed weekly rate for the rebuild", lines: [{ itemId: "SV-503", price: 495.00 }] });
+    // CT-8004: crane hire for next year. $56,000, so the Director approved and it now waits for the Executive.
+    contract(-3, { supplierId: "crestline", title: "Crane hire with operator, next year", cap: 56000, start: D(5), end: D(370),
+      basis: "Quote CL-Q-0412 after crane days ran over budget", lines: [{ itemId: "SV-502", price: 1400.00 }] }, ["director"]);
+    // CT-8005: instrument calibration. Waiting for the Director.
+    contract(-1, { supplierId: "truegauge", title: "Gauge and instrument calibration", cap: 6000, start: D(1), end: D(366),
+      basis: "Replaces calibration bought one order at a time", lines: [{ itemId: "SV-505", price: 42.00 }] }, []);
+
     // A. Extrusion profiles: awarded, PO placed, first partial delivery in. Delivery is tight against need date.
     var r = req(-30, "Maya Chen", "RM-101", 2000, 42, 14, "Pilot Line", "CC-100 Operations", "Production plan for line 2");
     approveAll(r, -27);
@@ -188,6 +213,12 @@
     P.decideService(s, "manager", T(-19), e.id, "Accepted", "Lift done, permit closed");
     e = P.postService(s, "requester", T(-8), po.id, { qty: 2, period: month(-9), note: "Removed the old fan housing, 2 days" });
     P.decideService(s, "manager", T(-7), e.id, "Accepted", "Housing removed and scrapped");
+
+    // Q. Scaffold for the line 2 rebuild, released from CT-8003. It uses the whole cap.
+    r = req(-62, "Tom Becker", "SV-503", 10, 520, 20, "Plant A", "CC-100 Operations", "Scaffold around the line 2 conveyor for the rebuild");
+    approveAll(r, -61);
+    po = P.createPO(s, "buyer", T(-60), r.id, { leadDays: 2 });
+    P.confirmPO(s, "buyer", T(-59), po.id, D(-58));
 
     // Supplier documents. Set last, so the demo records above were built while every document was valid.
     P.REF.suppliers.forEach(function (sp, i) {
