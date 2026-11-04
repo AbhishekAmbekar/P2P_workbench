@@ -223,3 +223,45 @@ body.sp-on{overflow:hidden}
 .bandro{margin:6px 0 0;font-size:var(--fs-sm);color:var(--mut);display:flex;gap:6px;align-items:baseline}
 .bandro:before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--mut);opacity:.6;transform:translateY(-1px)}
 @media (max-width:900px){.tabs button.hid{display:flex}.navmore{display:none}.tabs button.ro{opacity:.8}}
+/* Dashboard charts. Committed is indigo and pipeline orange: this pair passed the color checks
+   (lightness band, color blind and normal vision separation, 3:1 contrast). States use the status colors with labels. */
+:root{--c-com:#4338ca;--c-pipe:#eb6834}
+.dash{display:grid;gap:12px}
+.dash>.grid.g2{align-items:stretch}
+.stackcol{display:flex;flex-direction:column;gap:12px;min-width:0}.stackcol>.card{flex:1}
+.h3note{font-weight:400;font-size:var(--fs-sm);color:var(--mut);margin-left:6px}
+.ch-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:var(--fs-sm);color:var(--mut);margin:0 0 12px}
+.ch-legend span{display:inline-flex;align-items:center;gap:6px}
+.ch-legend span:before{content:"";width:10px;height:10px;border-radius:2px}
+.lg-com:before{background:var(--c-com)}.lg-pipe:before{background:var(--c-pipe)}
+.ch-legend .lg-line:before{width:2px;height:12px;border-radius:0;background:var(--ink)}
+.ch-hbars{display:grid;gap:12px}
+.hb-row{display:grid;grid-template-columns:minmax(110px,150px) 1fr auto;gap:12px;align-items:center;font-size:var(--fs-md)}
+.hb-track{position:relative;display:flex;gap:2px;height:14px;background:var(--bg);border-radius:4px}
+.hb-track i{display:block;height:100%;min-width:0;outline:none}
+.hb-track i:first-of-type{border-radius:4px 0 0 4px}
+.m-com{background:var(--c-com)}.m-pipe{background:var(--c-pipe)}
+.hb-line{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink)}
+.hb-val{font-size:var(--fs-sm);color:var(--mut);white-space:nowrap;min-width:86px;text-align:right;line-height:1.25}
+.hb-val small{display:block;font-size:11px}
+.ch-cols{display:grid;grid-template-columns:44px 1fr;height:180px}
+.cc-axis{display:flex;flex-direction:column;justify-content:space-between;font-size:11px;color:var(--mut);text-align:right;padding-right:8px;transform:translateY(-6px);height:calc(100% + 12px)}
+.cc-plot{position:relative;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--mut)}
+.cc-grid{position:absolute;left:0;right:0;height:1px;background:var(--line)}
+.cc-group{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:2px;padding:0 10%}
+.cc-group i{display:block;flex:1;max-width:34px;border-radius:4px 4px 0 0;outline:none}
+.cc-x{display:grid;grid-template-columns:44px repeat(4,1fr);margin-top:6px;font-size:11px;color:var(--mut);text-align:center}
+.cc-x b{display:block;font-size:var(--fs-sm);font-weight:500;color:var(--ink)}
+.ch-split{display:flex;gap:2px;height:16px;border-radius:4px;overflow:hidden;margin:4px 0 10px}
+.ch-split i{display:block;height:100%;cursor:pointer;outline:none}
+.m-ok{background:var(--ok)}.m-warn{background:var(--warn)}.m-bad{background:var(--bad)}.m-mut{background:#9ca3af}.m-rej{background:#4b5563}
+.ch-keys{display:flex;flex-wrap:wrap;gap:6px}
+.ch-key{display:inline-flex;align-items:center;gap:6px;background:var(--card);color:var(--ink);border:1px solid var(--line);padding:4px 10px;font-size:var(--fs-sm)}
+.ch-key:before{content:"";width:9px;height:9px;border-radius:2px}
+.ch-key b{font-weight:650}
+.k-ok:before{background:var(--ok)}.k-warn:before{background:var(--warn)}.k-bad:before{background:var(--bad)}.k-mut:before{background:#9ca3af}.k-rej:before{background:#4b5563}
+.ch-key:disabled{opacity:1;cursor:default}
+[data-tip]:focus-visible{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--acc)}
+.tip{position:fixed;z-index:50;display:none;max-width:280px;padding:6px 9px;border-radius:6px;background:var(--ink);color:#fff;font-size:12px;line-height:1.35;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+@media (max-width:600px){.hb-row{grid-template-columns:1fr auto;row-gap:4px}.hb-row .hb-track{grid-column:1 / -1;grid-row:2}
+  .cc-x span{font-size:10px}.cc-x b{font-size:11px}.ch-cols{height:150px}}

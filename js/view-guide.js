@@ -50,6 +50,9 @@
         "<p>The sidebar is grouped for the role you are working as. Your work lists the screens where that role acts. View only lists the screens it follows. More screens holds the rest, one click away. A view only screen says so under its title and names who works there. " +
         "Some screens open on the role's own slice, such as your own requests, what waits on you, or what is still due in, and every other filter, including All, is one click away. Switching roles starts each screen on the new role's default. " +
         "The Director and VP follow every screen but only act on approvals. None of this changes who can do what: the rules still decide that.</p>") +
+      section("Dashboard charts and oversight",
+        "<p>The dashboard shows budget by cost center, spend by category, delivery health and invoices by status. Committed means issued POs at landed cost. Pipeline means requests not yet ordered. The black line on each budget bar is the budget. Hover over a bar, tab to it, or tap it to see the exact value. Click a delivery or invoice state to open that list. " +
+        "Working as the Director or VP, the home screen is Oversight: approvals waiting on you first, then the charts and the open invoice exceptions by value, with who can fix each one.</p>") +
       section("Search",
         "<p>Use the search box at the top, or press Ctrl K (Cmd K on a Mac) or the / key. Type a record number such as PO-4001 or PR-2001, part of one such as po-40, the supplier's own invoice number, a supplier, an item, a status such as late, at risk or hold, or a screen such as receipts. " +
         "Every word you type must match, so adding words narrows the list. Use the arrow keys and Enter, or click. With the box empty it shows the records you opened last on this device.</p>") +

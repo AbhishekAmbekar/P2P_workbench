@@ -23,31 +23,41 @@
 
   var dollars = function (n) { return App.money(n).replace(/\.\d\d$/, ""); };
 
-  // Every category is listed, even with nothing ordered yet. Committed is issued POs at landed cost.
-  // Pipeline is what approved or pending requests will still order.
-  function spendBars(m) {
-    var cats = App.REF.categories;
-    var max = Math.max.apply(null, cats.map(function (c) { return m.spend[c] + m.pipeline[c]; })) || 1;
-    return '<div class="bars">' + cats.map(function (c) {
-      var a = m.spend[c], b = m.pipeline[c];
-      return '<div class="brow"><div class="top2"><span>' + esc(c) + ' <span class="muted">' + esc(App.REF.categoryType[c]) + "</span></span><span>" +
-        (a || b ? dollars(a) + " committed" + (b ? ", " + dollars(b) + " in pipeline" : "") : '<span class="muted">nothing yet</span>') + "</span></div>" +
-        '<div class="stack"><i class="seg-open" style="width:' + (100 * a / max) + '%"></i><i class="seg-req" style="width:' + (100 * b / max) + '%"></i></div></div>';
-    }).join("") + '<div class="legend"><span class="l-open">Committed (issued POs)</span><span class="l-req">Pipeline (requests not yet ordered)</span></div></div>';
+  // Clicking a chart part opens the list behind it, with the matching filter where the screen has one.
+  App.actions.dashGo = function (el) {
+    if (el.dataset.filter) { App.sel.poFilter = el.dataset.filter; App.sel.poFilterRole = App.role; }
+    App.go(el.dataset.arg);
+  };
+
+  function deliveryChart(m) {
+    return App.charts.split([
+      { label: "Clear", n: m.ctb.Clear, cls: "ok", act: "dashGo", arg: "pos", filter: "open" },
+      { label: "At risk", n: m.ctb["At Risk"], cls: "warn", act: "dashGo", arg: "pos", filter: "risk" },
+      { label: "Late", n: m.ctb.Late, cls: "bad", act: "dashGo", arg: "pos", filter: "risk" }
+    ], "open PO", "No open POs.") +
+      '<p class="hint">Slack is need by date minus supplier promise date. Under 5 days is at risk, below zero is late.</p>';
   }
 
-  function budgetCard(m) {
-    return m.budget.map(function (b) {
-      var total = Math.max(b.budget, b.used) || 1;
-      var w = function (v) { return (100 * v / total) + "%"; };
-      var cls = b.pct > 100 ? "pct-bad" : b.pct >= 90 ? "pct-warn" : "";
-      return '<div class="brow"><div class="top2"><span>' + esc(b.name) + '</span><span class="' + cls + '">' + b.pct + "% used</span></div>" +
-        '<div class="stack"><i class="seg-paid" style="width:' + w(b.paid) + '"></i><i class="seg-open" style="width:' + w(b.orderedOpen) + '"></i><i class="seg-req" style="width:' + w(b.requested) + '"></i></div>' +
-        '<div class="sub2">' + dollars(b.used) + " of " + dollars(b.budget) + " used. " +
-        (b.remaining >= 0 ? dollars(b.remaining) + " left." : '<b class="pct-bad">' + dollars(-b.remaining) + " over budget.</b>") +
-        " Paid " + dollars(b.paid) + ", ordered " + dollars(b.orderedOpen) + ", requested " + dollars(b.requested) + ".</div></div>";
-    }).join("") + '<div class="legend"><span class="l-paid">Paid</span><span class="l-open">Ordered, not yet paid</span><span class="l-req">Requested or in sourcing</span><span>Remaining</span></div>' +
-      '<p class="hint">A request that would take a cost center past its budget needs Executive approval.</p>';
+  function invoiceChart(s, m) {
+    var n = function (st) { return s.invoices.filter(function (i) { return i.status === st; }).length; };
+    return App.charts.split([
+      { label: "Paid", n: n("Paid"), cls: "mut", act: "dashGo", arg: "invoices" },
+      { label: "Ready to pay", n: n("Matched"), cls: "ok", act: "dashGo", arg: "invoices" },
+      { label: "Exception", n: n("Exception"), cls: "bad", act: "dashGo", arg: "invoices" },
+      { label: "Rejected", n: n("Rejected"), cls: "rej", act: "dashGo", arg: "invoices" }
+    ], "invoice", "No invoices yet.") +
+      '<p class="hint">' + (m.firstPass === null ? "No invoices yet." : m.firstPass + "% matched first time. " + dollars(m.exceptionValue) + " is held in exceptions.") + "</p>";
+  }
+
+  // Open exceptions, largest first, with who can fix each one. For the Director and VP.
+  function exceptionList(s) {
+    var rows = s.invoices.filter(function (i) { return i.status === "Exception"; })
+      .sort(function (a, b) { return b.qty * b.unitPrice - a.qty * a.unitPrice; });
+    if (!rows.length) return '<p class="empty">No invoice exceptions.</p>';
+    return "<table><tr><th>Invoice</th><th>Supplier</th><th class=\"num\">Value</th><th>Fix owner</th></tr>" + rows.map(function (i) {
+      return "<tr><td>" + i.id + "</td><td>" + esc(App.supplier(i.supplierId).name) + '</td><td class="num">' + App.money(i.qty * i.unitPrice) +
+        "</td><td>" + esc(P.invOwners(i).map(P.roleLabel).join(", ")) + "</td></tr>";
+    }).join("") + "</table>";
   }
 
   function lateList(s) {
@@ -73,27 +83,37 @@
         }).join("") + "</ul>"
       : '<p class="empty">Nothing is waiting on you right now.</p>';
 
-    return "<h2>Dashboard</h2>" + '<p class="hint">' + "What is waiting on you, delivery health, budgets and spend.</p>" +
-      '<div class="grid g2" style="margin-bottom:12px">' +
-      '<div class="card me"><h3>' + esc(role.label) + " desk</h3><p>" + esc(role.persona) + ". " + esc(role.desc) + "</p>" +
-      '<div class="hint" style="margin-bottom:8px">You can: ' + esc(role.can) + "</div>" + queue + "</div>" +
-      '<div class="card"><h3>Delivery health</h3><div class="grid g4" style="grid-template-columns:repeat(3,1fr)">' +
-        kpi(m.ctb.Clear, "Clear") + kpi(m.ctb["At Risk"], "At risk") + kpi(m.ctb.Late, "Late") + "</div>" +
-        '<p class="hint">Slack is need by date minus supplier promise date. Under 5 days is at risk, below zero is late.</p></div></div>' +
-
-      '<div class="card" style="margin-bottom:12px"><h3>Pipeline</h3>' + pipeline(s) + "</div>" +
-
-      '<div class="grid g4" style="margin-bottom:12px">' +
+    var card = function (title, body, note) { return '<div class="card"><h3>' + esc(title) + (note ? ' <span class="h3note">' + esc(note) + "</span>" : "") + "</h3>" + body + "</div>"; };
+    var desk = '<div class="card me"><h3>' + esc(role.label) + " desk</h3><p>" + esc(role.persona) + ". " + esc(role.desc) + "</p>" +
+      '<div class="hint" style="margin-bottom:8px">You can: ' + esc(role.can) + "</div>" + queue + "</div>";
+    var tiles = '<div class="grid g4">' +
         kpi(m.cycleDays === null ? "n/a" : m.cycleDays + " d", "Average days from approval to PO") +
         kpi(m.firstPass === null ? "n/a" : m.firstPass + "%", "Invoices matched first time") +
-        kpi(App.money(m.exceptionValue).replace(/\.\d\d$/, ""), "Value stuck in invoice exceptions") +
+        kpi(dollars(m.exceptionValue), "Value stuck in invoice exceptions") +
         kpi(m.receivedNotInvoiced, "POs received but not fully invoiced") +
         kpi(m.posAboveRef, "POs priced above contract or standard price") +
-        kpi(m.docAlerts.blocking, "Suppliers blocked by expired documents") + "</div>" +
+        kpi(m.docAlerts.blocking, "Suppliers blocked by expired documents") + "</div>";
+    var budget = card("Budget by cost center", App.charts.budget(m.budget) +
+      '<p class="hint">A request that would take a cost center past its budget needs Executive approval.</p>', "Annual");
+    var spend = card("Spend by category", App.charts.spend(App.REF.categories, m.spend, m.pipeline, App.REF.categoryType), "Landed cost");
+    var delivery = card("Delivery health", deliveryChart(m), "Open POs");
+    var invoices = card("Invoices", invoiceChart(s, m), "By status");
+    var late = card("Late and at risk POs", '<div class="wrap" style="border:0">' + lateList(s) + "</div>");
+    var flow = card("Pipeline", pipeline(s));
 
-      '<div class="card" style="margin-bottom:12px"><h3>Budget by cost center</h3>' + budgetCard(m) + "</div>" +
-
-      '<div class="grid g2"><div class="card"><h3>Spend by category</h3>' + spendBars(m) + "</div>" +
-      '<div class="card"><h3>Late and at risk POs</h3><div class="wrap" style="border:0">' + lateList(s) + "</div></div></div>";
+    // The Director and VP oversee the whole cycle: approvals first, then money and risk.
+    if (App.role === "director" || App.role === "executive") {
+      return "<h2>Oversight</h2>" + '<p class="hint">Approvals waiting on you, then budget, spend, delivery risk and invoice exceptions across the whole cycle.</p>' +
+        '<div class="dash">' +
+        '<div class="grid g2">' + desk + delivery + "</div>" +
+        '<div class="grid g2">' + budget + spend + "</div>" +
+        '<div class="grid g2">' + invoices + card("Invoice exceptions by value", '<div class="wrap" style="border:0">' + exceptionList(s) + "</div>", "Largest first") + "</div>" +
+        tiles + flow + late + "</div>";
+    }
+    return "<h2>Dashboard</h2>" + '<p class="hint">' + "What is waiting on you, delivery health, budgets and spend.</p>" +
+      '<div class="dash">' +
+      '<div class="grid g2">' + desk + '<div class="stackcol">' + delivery + invoices + "</div></div>" +
+      flow + tiles +
+      '<div class="grid g2">' + budget + spend + "</div>" + late + "</div>";
   };
 })();

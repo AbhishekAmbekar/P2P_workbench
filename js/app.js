@@ -172,7 +172,9 @@
       return t.id !== "dashboard" && t.id !== "guide" && f.work.indexOf(t.id) < 0 && f.view.indexOf(t.id) < 0;
     });
     var open = App.sel.navMore || more.some(function (t) { return t.id === App.tab; });
-    return btn(tab("dashboard")) +
+    var home = tab("dashboard");
+    if (App.role === "director" || App.role === "executive") home = { id: "dashboard", label: "Oversight" };
+    return btn(home) +
       grp("Your work") + f.work.map(function (id) { return btn(tab(id)); }).join("") +
       grp("View only") + f.view.map(function (id) { return btn(tab(id), "ro"); }).join("") +
       (more.length ? '<div class="navmore" data-act="navMore" role="button" tabindex="0" aria-expanded="' + open + '">More screens <span>' + more.length + "</span></div>" +
@@ -253,6 +255,8 @@
   App.actions.goto = function (el) { App.go(el.dataset.arg, el.dataset.id); };
 
   document.addEventListener("click", function (e) {
+    var tipped = e.target.closest && e.target.closest("[data-tip]");
+    if (tipped) tipShow(tipped);
     var el = e.target.closest("[data-act]");
     if (!el || el.disabled) return;
     var fn = App.actions[el.dataset.act];
@@ -261,6 +265,25 @@
   document.addEventListener("keydown", function (e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".navmore")) { e.preventDefault(); App.actions.navMore(); }
   });
+  // ---------- chart tooltips ----------
+  // Any element with data-tip shows its text in a small box on hover or keyboard focus. A tap shows it on touch screens.
+  var tipEl = null;
+  function tipShow(el) {
+    if (!tipEl) { tipEl = document.createElement("div"); tipEl.className = "tip"; tipEl.setAttribute("role", "tooltip"); document.body.appendChild(tipEl); }
+    tipEl.textContent = el.getAttribute("data-tip");
+    var r = el.getBoundingClientRect();
+    tipEl.style.display = "block";
+    var w = tipEl.offsetWidth, x = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+    var y = r.top - tipEl.offsetHeight - 8;
+    tipEl.style.left = x + "px"; tipEl.style.top = (y < 8 ? r.bottom + 8 : y) + "px";
+  }
+  function tipHide() { if (tipEl) tipEl.style.display = "none"; }
+  document.addEventListener("mouseover", function (e) { var el = e.target.closest && e.target.closest("[data-tip]"); if (el) tipShow(el); else tipHide(); });
+  document.addEventListener("focusin", function (e) { var el = e.target.closest && e.target.closest("[data-tip]"); if (el) tipShow(el); else tipHide(); });
+  document.addEventListener("focusout", tipHide);
+  window.addEventListener("scroll", tipHide, true);
+  App.tipText = function () { return tipEl && tipEl.style.display === "block" ? tipEl.textContent : ""; };
+
   document.addEventListener("submit", function (e) {
     var form = e.target.closest("form[data-form]");
     if (!form) return;
