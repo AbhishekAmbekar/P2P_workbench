@@ -70,6 +70,8 @@ for f in ui-smoke ui-requests ui-rfx ui-pos ui-grn ui-invoices ui-controls ui-ex
 
 Also check the phone width (390 px) for sideways scrolling after layout changes.
 
+GitHub Actions (`.github/workflows/tests.yml`) runs all of these on every pull request to main and every push to main, with jsdom installed in the runner's temp folder. It runs every `tests/ui-*.js` file, so a new screen suite needs no workflow change. Still run the tests locally before pushing. Check the pull request's status before telling the owner it is ready.
+
 ## Planned next
 
 Agreed order after the UI brainstorm. Search is done (no SAP codes, by the owner's choice). Record numbers in tables link to record pages (done in `App.render`, which rewrites a cell that starts with REQ, PR, RFX, PO, GRN, SES or INV and a number). Role focus part 1 is done: sidebar groups per role from `REF.focus` (`App.focus`, `App.viewOnly` in `app.js`), the view only line in the band, default filters on Requests and Purchase orders (reset when the role changes), Import shown only to the role that runs it. The Requester's badge counts only their own rejected requests. The Manager follows every screen like the Director and VP (owner's decision), and all three get the Oversight home (`App.oversees`). Part 2 is done: dashboard charts for everyone, and the Oversight home (approvals, charts, invoice exceptions by value).

@@ -86,6 +86,8 @@ Plain HTML, CSS and JavaScript. No framework and no dependencies. The Inter font
 
 ## Tests
 
+GitHub runs every suite below on each pull request and each push to main (`.github/workflows/tests.yml`). The pull request shows a green check when all pass, or a red cross with the failing suite named.
+
 ```
 node tests/logic.test.js
 ```

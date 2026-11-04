@@ -1,0 +1,46 @@
+# Runs every test suite on each pull request to main, and on each push to main.
+# A red cross on the pull request means a check failed. Open the run to see which one.
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Engine, CSV and search checks
+        run: |
+          node tests/logic.test.js
+          node tests/csv.test.js
+          node tests/search.test.js
+
+      # The screen tests load jsdom from a folder outside the repo, so the repo stays free of dependencies.
+      - name: Install jsdom outside the repo
+        run: |
+          mkdir -p "$RUNNER_TEMP/jsdom"
+          cd "$RUNNER_TEMP/jsdom"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund jsdom@30.1.3
+
+      # Every tests/ui-*.js file runs, so a new screen suite is picked up without editing this file.
+      - name: Screen tests
+        run: |
+          fail=0; bad=""
+          for f in tests/ui-*.js; do
+            echo "::group::$f"
+            if ! node "$f" "$RUNNER_TEMP/jsdom"; then fail=1; bad="$bad $f"; fi
+            echo "::endgroup::"
+          done
+          if [ "$fail" = 1 ]; then echo "::error::Failing screen suites:$bad"; fi
+          exit $fail
