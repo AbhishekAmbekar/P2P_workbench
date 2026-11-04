@@ -561,6 +561,8 @@
     var sp = supplier(supId);
     if (!REF.docTypes[docType]) fail("Choose a document type.");
     if (!validDate(expiry) || expiry <= dateOf(now)) fail("The new expiry date must be in the future.");
+    if (!s.docs) s.docs = {};
+    if (!s.docs[supId]) s.docs[supId] = {};   // a supplier added after the data was saved has no document record yet
     var have = s.docs[supId][docType] || null;
     if (have && expiry <= have) fail("The new expiry date must be later than the current one (" + have + ").");
     if (!note || note.trim().length < 5) fail("Note what was checked (certificate number, issuing body, reviewer).");
