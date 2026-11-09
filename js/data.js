@@ -63,13 +63,13 @@
     // What each role works on, and what it follows along with. Used for the sidebar groups and the "View only" line.
     // This is about focus, not permission: the engine rules decide who can act. Screens in neither list sit under "More screens".
     focus: {
-      requester:   { work: ["requests", "rfx", "services"], view: ["pos", "grn", "audit"] },
-      manager:     { work: ["requests", "services"], view: ["rfx", "contracts", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      requester:   { work: ["projects", "requests", "rfx", "services"], view: ["pos", "grn", "audit"] },
+      manager:     { work: ["requests", "services"], view: ["projects", "rfx", "contracts", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
       quality:     { work: ["requests", "rfx", "grn", "suppliers"], view: ["pos", "audit"] },
       engineering: { work: ["requests", "rfx"], view: ["pos", "audit"] },
-      director:    { work: ["requests", "rfx", "contracts", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      executive:   { work: ["requests", "rfx", "contracts", "services"], view: ["pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
-      buyer:       { work: ["rfx", "contracts", "pos", "expedite", "suppliers", "invoices"], view: ["requests", "grn", "services", "audit"] },
+      director:    { work: ["requests", "rfx", "contracts", "services"], view: ["projects", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      executive:   { work: ["requests", "rfx", "contracts", "services"], view: ["projects", "pos", "expedite", "grn", "invoices", "suppliers", "audit"] },
+      buyer:       { work: ["rfx", "contracts", "pos", "expedite", "suppliers", "invoices"], view: ["projects", "requests", "grn", "services", "audit"] },
       warehouse:   { work: ["grn"], view: ["pos", "invoices", "audit"] },
       ap:          { work: ["invoices"], view: ["contracts", "pos", "grn", "services", "suppliers", "audit"] }
     },
@@ -77,6 +77,7 @@
     screenOwners: {
       requests: "The Requester raises requests here. Approvers decide on them in order.",
       rfx: "The Buyer runs sourcing here. The user side checks offers against the spec, and the Director approves awards.",
+      projects: "The Requester groups the requests that must come together by one date into a project. Everyone else follows it.",
       pos: "The Buyer creates POs and keeps supplier dates and prices current.",
       contracts: "The Buyer sets up rate contracts. The Director approves them, and the Executive too from $50,000. Each PO from a contract is a release that uses up its cap.",
       expedite: "The Buyer chases suppliers from here.",

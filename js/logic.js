@@ -49,8 +49,8 @@
       docs[sp.id] = { quality: "9999-12-31", origin: "9999-12-31", subtier: "9999-12-31" };
     });
     return {
-      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], audit: [], docs: docs, contacts: {}
+      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000, PRJ: 9000 },
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], audit: [], docs: docs, contacts: {}
     };
   }
 
@@ -189,8 +189,13 @@
       itemId: it.id, qty: qty, uom: it.uom, estUnit: est, needBy: f.needBy,
       site: f.site, costCenter: f.costCenter, reason: f.reason.trim(),
       status: "Pending approval", approvals: buildChain(it, total, bc.over), overBudget: bc.over,
-      createdAt: now, approvedAt: null, rfxId: null, poId: null
+      createdAt: now, approvedAt: null, rfxId: null, poId: null, projectId: null
     };
+    if (f.projectId) {
+      var pj = getPRJ(s, f.projectId);
+      if (pj.status !== "Open") fail(pj.id + " is closed. Choose an open project, or none.");
+      r.projectId = pj.id;
+    }
     s.requests.push(r);
     log(s, now, role, r.id, "Request raised", qty + " x " + it.id + " for " + fmt(requestTotal(r)) +
       ". Approval chain: " + r.approvals.map(function (a) { return roleLabel(a.role); }).join(" then ") +
@@ -586,6 +591,132 @@
       });
     });
     return true;
+  }
+
+  // ---------- 2d. projects ----------
+  // A project groups the requests (and through them the RFx, POs, receipts, service entries and invoices) that must come
+  // together by one date, such as a pump overhaul or a shutdown. Optional: everyday buying needs no project.
+  // Criticality is required, because an engineer can always say how much a slip matters. Cost per day is optional,
+  // because it usually comes from production planning or finance; with none, the app shows days, never a made up figure.
+  var prjOf = function (s) { if (!s.projects) s.projects = []; if (!s.seq.PRJ) s.seq.PRJ = 9000; return s.projects; };
+  var getPRJ = function (s, id) { return byId(prjOf(s), id, "Project"); };
+  var CRITICALITY = ["High", "Medium", "Low"];
+  // The Requester (the planner or engineer) creates projects and groups work into them. The Buyer can also add an order it
+  // places. Everyone else follows the project.
+  var PRJ_ROLES = ["requester"];
+
+  function createProject(s, role, now, f) {
+    need(role, PRJ_ROLES);
+    var name = (f.name || "").trim();
+    if (name.length < 5) fail("Give the project a name people will recognise, such as the equipment and the work.");
+    if (!validDate(f.target)) fail("Enter the target date, when everything must be in place.");
+    if (CRITICALITY.indexOf(f.criticality) < 0) fail("Choose how critical a slip is: High, Medium or Low.");
+    var cost = f.costPerDay === undefined || f.costPerDay === null || f.costPerDay === "" ? null : Number(f.costPerDay);
+    if (cost !== null && !(cost >= 0)) fail("Cost per day must be a number, or left empty if nobody knows it yet.");
+    var p = { id: nextId(s, "PRJ", "PRJ"), name: name, target: f.target, criticality: f.criticality, costPerDay: cost,
+      owner: (f.owner || "").trim() || roleLabel(role), site: f.site || "", note: (f.note || "").trim(),
+      status: "Open", by: role, createdAt: now };
+    prjOf(s).push(p);
+    log(s, now, role, p.id, "Project created: " + name, "Target " + p.target + ", criticality " + p.criticality +
+      (cost !== null ? ", downtime " + fmt(cost) + " a day" : ", no cost per day given"));
+    return p;
+  }
+
+  // The request a record belongs to: a request or PR itself, or the request behind an RFx, PO, receipt, service entry or invoice.
+  function requestOf(s, recordId) {
+    var f = docFlow(s, recordId);
+    if (!f) fail(recordId + " was not found.");
+    return f.request;
+  }
+
+  // Link a record's request to a project, or unlink it with projectId null. Everything after the request follows it.
+  function linkToProject(s, role, now, recordId, projectId) {
+    need(role, PRJ_ROLES.concat(["buyer"]));
+    var r = requestOf(s, recordId);
+    if (projectId) {
+      var p = getPRJ(s, projectId);
+      if (p.status !== "Open") fail(p.id + " is closed.");
+      if (r.status === "Cancelled") fail(r.id + " is cancelled, so it cannot join a project.");
+      if (r.projectId === p.id) fail(r.id + " is already in " + p.id + ".");
+      var from = r.projectId;
+      r.projectId = p.id;
+      log(s, now, role, p.id, r.id + " added to the project" + (from ? ", moved from " + from : ""), item(r.itemId).name);
+      return p;
+    }
+    if (!r.projectId) fail(r.id + " is not in a project.");
+    var old = r.projectId;
+    r.projectId = null;
+    log(s, now, role, old, r.id + " removed from the project", item(r.itemId).name);
+    return getPRJ(s, old);
+  }
+
+  // Where one request of a project stands: the step it waits at, who holds it, since when, the date it should be ready,
+  // and how that date compares with the project target.
+  var STAGES = ["Request", "Approval", "Sourcing", "Order", "Delivery", "Ready"];
+  function projectRow(s, p, r, today) {
+    var it = item(r.itemId), x = r.rfxId ? getRfx(s, r.rfxId) : null, po = r.poId ? getPO(s, r.poId) : null;
+    var row = { request: r, item: it, po: po, rfx: x, service: !!it.service, stage: 0, holder: "", expected: null, ready: false, note: "" };
+    var pending = function (list) { return (list || []).find(function (a) { return a.status === "Pending"; }); };
+    if (r.status === "Rejected") { row.stage = 1; row.holder = "Requester"; row.note = "Rejected. Raise a new request."; row.blocked = true; }
+    else if (r.status === "Pending approval") { row.stage = 1; row.holder = roleLabel(pending(r.approvals).role); }
+    else if (r.status === "Approved") { row.stage = 2; row.holder = "Buyer"; }
+    else if (r.status === "Sourcing" && x) {
+      row.stage = 2;
+      row.holder = x.status === "Open" ? "Suppliers quoting" : x.status === "Technical review" ? roleLabel(x.techRole) + ", technical review"
+        : x.status === "Award pending approval" ? roleLabel((pending(x.awardApprovals) || { role: "director" }).role) + ", award approval" : "Buyer";
+    } else if (r.status === "Awarded") { row.stage = 3; row.holder = "Buyer"; }
+    else if (po) {
+      var t = grnTotals(s, po.id);
+      if (row.service) {
+        row.expected = po.promisedDate;
+        if (!po.confirmed) { row.stage = 3; row.holder = "Supplier, to confirm"; }
+        else {
+          row.stage = 4; row.holder = "Booked with the supplier";
+          var nx = sesOf(s).filter(function (e) { return e.poId === po.id; }).map(nextReleaser).filter(Boolean)[0];
+          if (nx) row.holder = roleLabel(nx) + ", service release";
+          if (po.promisedDate <= p.target) { row.ready = true; row.note = "Booked for " + po.promisedDate; }
+        }
+      } else if (t.accepted >= po.qty) { row.stage = 5; row.ready = true; row.holder = "In stores"; row.expected = null; }
+      else {
+        row.expected = po.promisedDate;
+        if (t.hold > 0) { row.stage = 4; row.holder = "Quality, receipt on hold"; row.blocked = true; }
+        else if (!po.confirmed) { row.stage = 3; row.holder = "Supplier, to confirm"; }
+        else { row.stage = 4; row.holder = "Supplier" + (t.accepted ? ", " + t.accepted + " of " + po.qty + " in" : ""); }
+      }
+    }
+    if (row.ready) { row.state = "Ready"; row.stage = 5; }
+    else {
+      var exp = row.expected || r.needBy;
+      row.expectedShown = exp;
+      var slack = daysBetween(exp, p.target);
+      row.slack = slack;
+      row.state = row.blocked ? "Blocked" : slack < 0 ? "Late" : slack < 5 ? "At risk" : "On track";
+      if (!row.expected && !row.note) row.note = "Not ordered yet. Date shown is the need by date.";
+    }
+    // Days since anything last moved on this request, its RFx, PO, receipts or service entries.
+    var ids = [r.id, r.rfxId, r.poId].filter(Boolean);
+    if (po) s.grns.concat(sesOf(s)).forEach(function (g) { if (g.poId === po.id) ids.push(g.id); });
+    var last = s.audit.filter(function (a) { return ids.indexOf(a.entity) >= 0; }).map(function (a) { return a.at; }).sort().pop() || r.createdAt;
+    row.since = daysBetween(last, today);
+    return row;
+  }
+
+  var STATE_RANK = { Late: 0, Blocked: 1, "At risk": 2, "On track": 3, Ready: 4 };
+  function projectStatus(s, p, today) {
+    var rows = s.requests.filter(function (r) { return r.projectId === p.id && r.status !== "Cancelled"; })
+      .map(function (r) { return projectRow(s, p, r, today); })
+      .sort(function (a, b) { return STATE_RANK[a.state] - STATE_RANK[b.state] || (b.expectedShown || "").localeCompare(a.expectedShown || ""); });
+    var open = rows.filter(function (r) { return !r.ready; });
+    var dates = open.map(function (r) { return r.expectedShown; }).filter(Boolean).sort();
+    var readyBy = open.length ? dates[dates.length - 1] : (rows.length ? today : null);
+    var gating = open.length ? open.slice().sort(function (a, b) { return (b.expectedShown || "").localeCompare(a.expectedShown || ""); })[0] : null;
+    var daysLate = readyBy ? Math.max(0, daysBetween(p.target, readyBy)) : 0;
+    var counts = { Ready: 0, "On track": 0, "At risk": 0, Late: 0, Blocked: 0 };
+    rows.forEach(function (r) { counts[r.state] += 1; });
+    var state = !rows.length ? "Empty" : rows.reduce(function (w, r) { return STATE_RANK[r.state] < STATE_RANK[w] ? r.state : w; }, "Ready");
+    return { rows: rows, counts: counts, readyBy: readyBy, gating: gating && gating.state !== "On track" ? gating : null, daysLate: daysLate,
+      delayCost: p.costPerDay !== null && p.costPerDay !== undefined ? daysLate * p.costPerDay : null, state: state,
+      value: sum(rows, function (r) { return r.po ? r.po.qty * r.po.unitPrice : requestTotal(r.request); }) };
   }
 
   // ---------- 3. purchase order ----------
@@ -1131,6 +1262,7 @@
     return {
       kind: kind, id: id, request: req, rfx: x, po: po,
       contract: po && po.contractId ? ctOf(s).find(function (c) { return c.id === po.contractId; }) || null : null,
+      project: req.projectId ? prjOf(s).find(function (p) { return p.id === req.projectId; }) || null : null,
       grns: po ? s.grns.filter(function (r) { return r.poId === po.id; }) : [],
       ses: po ? sesOf(s).filter(function (r) { return r.poId === po.id; }) : [], service: po ? isService(po) : !!item(req.itemId).service,
       invoices: po ? s.invoices.filter(function (r) { return r.poId === po.id; }) : []
@@ -1170,6 +1302,12 @@
     }).length, "rfx");
     var openPOs = s.pos.filter(function (po) { return ["Issued", "Confirmed", "Partially received"].indexOf(poStatus(s, po)) >= 0; });
     var invFor = function (who) { return s.invoices.filter(function (i) { return invOwners(i).indexOf(who) >= 0; }).length; };
+    if (role === "requester") {
+      add("Your projects that are late or at risk", prjOf(s).filter(function (p) {
+        var st = p.status === "Open" ? projectStatus(s, p, today).state : "";
+        return st === "Late" || st === "At risk" || st === "Blocked";
+      }).length, "projects");
+    }
     add("Contracts waiting for your approval", ctOf(s).filter(function (c) {
       var st = c.status === "Pending approval" && c.approvals.find(function (a) { return a.status === "Pending"; });
       return st && st.role === role;
@@ -1269,7 +1407,8 @@
     isService: isService, postService: postService, decideService: decideService, serviceStatus: serviceStatus,
     serviceChain: serviceChain, serviceReleases: releasesOf, nextReleaser: nextReleaser,
     createContract: createContract, decideContract: decideContract, contractChain: contractChain, contractStatus: contractStatus,
-    contractFor: contractFor, refPriceAt: refPriceAt, migrateContracts: migrateContracts, CT_WARN_DAYS: CT_WARN_DAYS,
+    contractFor: contractFor, refPriceAt: refPriceAt,
+    createProject: createProject, linkToProject: linkToProject, projectStatus: projectStatus, CRITICALITY: CRITICALITY, PROJECT_STAGES: STAGES, migrateContracts: migrateContracts, CT_WARN_DAYS: CT_WARN_DAYS,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
     rejectInvoice: rejectInvoice, payInvoice: payInvoice, invOwners: invOwners,

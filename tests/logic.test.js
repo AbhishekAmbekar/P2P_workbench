@@ -677,10 +677,77 @@ test("saved data from before contracts gets its old contract prices as approved 
   assert.strictEqual(P.contractFor(s, "MR-402", day(0)).line.price, 9.10);
 });
 
+// ---------- projects ----------
+test("the Requester creates a project with a target and a criticality, and the cost per day is optional", () => {
+  const s = P.newState();
+  const f = { name: "Pump P-204 overhaul", target: day(14), criticality: "High" };
+  throwsWith(() => P.createProject(s, "buyer", NOW, f), "cannot do this");
+  throwsWith(() => P.createProject(s, "requester", NOW, Object.assign({}, f, { name: "x" })), "name people will recognise");
+  throwsWith(() => P.createProject(s, "requester", NOW, Object.assign({}, f, { target: "" })), "target date");
+  throwsWith(() => P.createProject(s, "requester", NOW, Object.assign({}, f, { criticality: "Urgent" })), "High, Medium or Low");
+  throwsWith(() => P.createProject(s, "requester", NOW, Object.assign({}, f, { costPerDay: -5 })), "left empty");
+  const p = P.createProject(s, "requester", NOW, f);
+  assert.deepStrictEqual([p.id, p.costPerDay, p.status], ["PRJ-9001", null, "Open"]);
+  const st = P.projectStatus(s, p, day(0));
+  assert.deepStrictEqual([st.state, st.rows.length, st.delayCost], ["Empty", 0, null]);
+});
+
+test("a request joins a project when raised or later, and its PO and receipts follow it", () => {
+  const s = P.newState();
+  const p = P.createProject(s, "requester", NOW, { name: "Pump P-204 overhaul", target: day(14), criticality: "High", costPerDay: 1000 });
+  const a = baseReq(s, { itemId: "MR-401", qty: 4, estUnit: 58, needBy: day(10), projectId: p.id });
+  assert.strictEqual(a.projectId, p.id);
+  const b = baseReq(s, { itemId: "MR-203", qty: 1, estUnit: 910, needBy: day(10) });
+  approveAll(s, b);
+  const po = P.createPO(s, "buyer", NOW, b.id, { supplierId: "tidewater", unitPrice: 910, leadDays: 20 });
+  P.linkToProject(s, "buyer", NOW, po.id, p.id);   // linked through its PO, so the request joins
+  assert.strictEqual(b.projectId, p.id);
+  throwsWith(() => P.linkToProject(s, "requester", NOW, b.id, p.id), "already in");
+  throwsWith(() => P.linkToProject(s, "ap", NOW, b.id, p.id), "cannot do this");
+  const st = P.projectStatus(s, p, day(0));
+  const seal = st.rows.find(r => r.request.id === b.id);
+  assert.deepStrictEqual([seal.state, seal.holder, seal.expectedShown], ["Late", "Supplier, to confirm", day(20)]);
+  assert.strictEqual(st.gating.request.id, b.id, "the latest item holds the project up");
+  assert.deepStrictEqual([st.readyBy, st.daysLate, st.delayCost, st.state], [day(20), 6, 6000, "Late"]);
+  assert.strictEqual(st.rows.find(r => r.request.id === a.id).holder, "Manager", "an unapproved request is held by its next approver");
+  P.linkToProject(s, "requester", NOW, b.id, null);
+  assert.strictEqual(b.projectId, null);
+  assert.strictEqual(P.projectStatus(s, p, day(0)).rows.length, 1);
+});
+
+test("project rows are ready when goods are received or a service is booked in time, blocked on a quality hold", () => {
+  const s = P.newState();
+  const p = P.createProject(s, "requester", NOW, { name: "Packaging line changeover", target: day(20), criticality: "Medium" });
+  const g = baseReq(s, { itemId: "MR-401", qty: 10, estUnit: 58, needBy: day(15), projectId: p.id });
+  approveAll(s, g);
+  const po = P.createPO(s, "buyer", NOW, g.id, { supplierId: "atlas", unitPrice: 58, leadDays: 5 });
+  P.confirmPO(s, "buyer", NOW, po.id, day(5));
+  P.postGRN(s, "warehouse", NOW, po.id, { qty: 10, result: "Hold", note: "Check the crimp fittings" });
+  let row = P.projectStatus(s, p, day(0)).rows[0];
+  assert.deepStrictEqual([row.state, row.holder], ["Blocked", "Quality, receipt on hold"]);
+  P.releaseHold(s, "quality", NOW, s.grns[0].id, "Accepted", "Fittings checked");
+  assert.strictEqual(P.projectStatus(s, p, day(0)).rows[0].state, "Ready");
+  const c = baseReq(s, { itemId: "SV-502", qty: 1, estUnit: 1450, needBy: day(15), projectId: p.id });
+  approveAll(s, c);
+  const crane = P.createPO(s, "buyer", NOW, c.id, { supplierId: "crestline", unitPrice: 1450, leadDays: 10 });
+  P.confirmPO(s, "buyer", NOW, crane.id, day(10));
+  const st = P.projectStatus(s, p, day(0));
+  assert.deepStrictEqual([st.state, st.counts.Ready, st.gating, st.daysLate], ["Ready", 2, null, 0]);
+});
+
+test("the seed has five projects, and the pump overhaul is held up by its seal kit", () => {
+  const s = seed(NOW);
+  assert.strictEqual(s.projects.length, 5);
+  const pump = P.projectStatus(s, s.projects[0], day(0));
+  assert.strictEqual(pump.gating.item.id, "MR-203");
+  assert.ok(pump.delayCost > 0, "the pump overhaul has a cost per day, so its delay has a cost");
+  assert.ok(P.queueFor(s, "requester", NOW).some(q => q.label === "Your projects that are late or at risk"));
+});
+
 test("seed builds without breaking any rule and covers every stage", () => {
   const s = seed(NOW);
   const m = P.metrics(s, NOW);
-  assert.strictEqual(s.requests.length, 17);
+  assert.strictEqual(s.requests.length, 21);   // includes four requests for the pump overhaul project
   assert.ok(m.pending >= 2, "pending approvals");
   assert.ok(m.awaitingSourcing >= 1, "awaiting sourcing");
   assert.ok(s.rfx.some(x => x.status === "Open"));
@@ -740,7 +807,7 @@ test("budget status separates paid, ordered, requested and remaining", () => {
   assert.strictEqual(c1.remaining, 24930);
   assert.strictEqual(c1.pct, 83);
   assert.strictEqual(by["CC-200 Engineering"].requested, 61540);   // includes the awarded RFx at its quoted value
-  assert.strictEqual(by["CC-300 Maintenance"].pct, 75);   // includes the two service POs
+  assert.strictEqual(by["CC-300 Maintenance"].pct, 80);   // includes the service POs and the pump overhaul
   assert.strictEqual(by["CC-400 Quality"].orderedOpen, 7700);
   P.budgetStatus(s).forEach(b => assert.strictEqual(b.used + b.remaining, b.budget));
 });
@@ -881,7 +948,7 @@ test("committed spend and pipeline always list every category", () => {
   const m2 = P.metrics(seed(NOW), NOW);
   assert.strictEqual(m2.spend["Raw materials"], 100520);
   assert.strictEqual(m2.spend.Packaging, 7700);
-  assert.strictEqual(m2.spend.MRO, 7820);
+  assert.strictEqual(m2.spend.MRO, 8962);
   assert.strictEqual(m2.spend.Components, 0);
   assert.ok(m2.pipeline.Components > 0, "open component work shows in the pipeline");
 });
@@ -902,7 +969,7 @@ test("the seed has expired and expiring supplier documents, and a tariff that re
 test("the expedite list ranks overdue, then late, then at risk, then unconfirmed, and skips received POs", () => {
   const s = seed(NOW);
   const rows = P.expediteList(s, NOW);
-  assert.deepStrictEqual(rows.map(r => r.po.id + ":" + r.kind), ["PO-4006:late", "PO-4007:risk", "PO-4001:risk"]);
+  assert.deepStrictEqual(rows.map(r => r.po.id + ":" + r.kind), ["PO-4006:late", "PO-4011:late", "PO-4007:risk", "PO-4001:risk"]);
   assert.strictEqual(rows[0].left, 20);
   assert.strictEqual(rows[0].value, 1840);
   assert.ok(!rows.some(r => r.po.id === "PO-4002"), "a fully received PO must not be listed");
@@ -979,7 +1046,7 @@ test("opening a draft is logged as drafted, never as sent, and only the buyer ca
 
 test("the buyer queue shows how many POs need chasing", () => {
   const q = P.queueFor(seed(NOW), "buyer", NOW).find(i => i.tab === "expedite");
-  assert.strictEqual(q.count, 3);
+  assert.strictEqual(q.count, 4);
 });
 
 test("document flow links a PO to its request, PR, RFx, receipts and invoices from any of its ids", () => {

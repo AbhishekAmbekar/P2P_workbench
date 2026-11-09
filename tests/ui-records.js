@@ -8,10 +8,10 @@ const flowIds = () => $$("#view .fstep b").map(b => b.textContent);
 click($("#resetBtn"));
 role("buyer");
 
-test("the sidebar keeps all twelve sections, grouped for the role", () => {
+test("the sidebar keeps all thirteen sections, grouped for the role", () => {
   const groups = $$("#tabs .navgrp").map(g => g.textContent);
   check(groups.join(",") === "Your work,View only,Help", "groups " + groups);
-  check($$('#tabs button[data-act="tab"]').length === 12, "twelve sections");
+  check($$('#tabs button[data-act="tab"]').length === 13, "thirteen sections");
 });
 
 test("a PO opens as a full page with facts, document flow and sections", () => {

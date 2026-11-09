@@ -20,9 +20,9 @@ click($("#resetBtn"));
 
 test("the list is ranked and the buyer tab badge counts it", () => {
   role("buyer");
-  check($('#tabs [data-arg="expedite"] .badge').textContent === "3", "badge should show 3");
+  check($('#tabs [data-arg="expedite"] .badge').textContent === "4", "badge should show 4");
   tab("expedite");
-  check(rows().length === 3, "expected 3 rows, got " + rows().length);
+  check(rows().length === 4, "expected 4 rows, got " + rows().length);
   check(rows()[0].textContent.indexOf("PO-4006") >= 0 && rows()[0].textContent.indexOf("Late") >= 0, "worst PO should be first: " + rows()[0].textContent);
   check(rows()[0].textContent.indexOf("Promised 5 days after the need by date") >= 0);
   check(text().indexOf("no email saved") >= 0, "demo suppliers have no address");
@@ -30,7 +30,7 @@ test("the list is ranked and the buyer tab badge counts it", () => {
 
 test("other roles can read the list but cannot draft", () => {
   role("warehouse"); tab("expedite");
-  check(rows().length === 3);
+  check(rows().length === 4);
   check(!btn("Draft email"), "warehouse should not see Draft email");
   check(text().indexOf("The Buyer chases suppliers") >= 0);
   role("buyer");

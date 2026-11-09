@@ -220,6 +220,40 @@
     po = P.createPO(s, "buyer", T(-60), r.id, { leadDays: 2 });
     P.confirmPO(s, "buyer", T(-59), po.id, D(-58));
 
+    // R. Projects. A project groups the requests that must come together by one date. Most buying has no project.
+    var byReason = function (txt) { return s.requests.find(function (q) { return q.reason.indexOf(txt) === 0; }); };
+    var project = function (off, f, reqs) {
+      var p = P.createProject(s, "requester", T(off), f);
+      reqs.forEach(function (q, i) { P.linkToProject(s, "requester", T(off, 15 + i), q.id, p.id); });
+      return p;
+    };
+    // PRJ-9001: the pump overhaul. The seal kit is promised after the target date, so it holds the whole job up.
+    var pump = project(-9, { name: "Line 2 pump P-204 overhaul", target: D(12), criticality: "High", costPerDay: 4200, owner: "Tom Becker", site: "Plant A",
+      note: "Cooling water pump. Line 2 cannot run without it." }, [byReason("Conveyor bearing replacement stock")]);
+    r = req(-8, "Tom Becker", "MR-203", 1, 910, 10, "Plant A", "CC-300 Maintenance", "Seal kit for pump P-204 overhaul");
+    r.projectId = pump.id; approveAll(r, -8);
+    po = P.createPO(s, "buyer", T(-7), r.id, { supplierId: "tidewater", unitPrice: 910, leadDays: 21 });
+    P.confirmPO(s, "buyer", T(-6), po.id, D(14));
+    r = req(-8, "Tom Becker", "MR-401", 4, 58, 10, "Plant A", "CC-300 Maintenance", "Discharge hoses for pump P-204");
+    r.projectId = pump.id; approveAll(r, -7);
+    po = P.createPO(s, "buyer", T(-6), r.id, { supplierId: "atlas", unitPrice: 58, leadDays: 11 });
+    P.confirmPO(s, "buyer", T(-5), po.id, D(5));
+    r = req(-7, "Tom Becker", "SV-502", 1, 1450, 10, "Plant A", "CC-300 Maintenance", "Crane to lift pump P-204 out and back");
+    r.projectId = pump.id; approveAll(r, -6);
+    po = P.createPO(s, "buyer", T(-5), r.id, { supplierId: "crestline", unitPrice: 1450, leadDays: 15 });
+    P.confirmPO(s, "buyer", T(-4), po.id, D(10));
+    r = req(-2, "Tom Becker", "SV-501", 24, 66, 10, "Plant A", "CC-300 Maintenance", "Fitters for the pump P-204 overhaul");
+    r.projectId = pump.id;   // waits for the Manager
+    // PRJ-9002 to PRJ-9005: existing demo records grouped by the work they serve.
+    project(-60, { name: "Line 2 conveyor rebuild and restart", target: D(20), criticality: "High", owner: "Maya Chen", site: "Plant A" },
+      [byReason("Scaffold around the line 2 conveyor"), byReason("Production plan for line 2")]);
+    project(-40, { name: "November shutdown maintenance", target: D(14), criticality: "Medium", owner: "Tom Becker", site: "Plant B" },
+      [byReason("Shutdown maintenance kits"), byReason("Preventive maintenance cycle"), byReason("Lift the new heat exchanger"), byReason("Breakdown and shutdown support")]);
+    project(-30, { name: "New product pack launch", target: D(25), criticality: "Medium", owner: "Maya Chen", site: "Pilot Line",
+      note: "Customer launch date is fixed." }, [byReason("Trial lot for the new product pack"), byReason("Housings for the pack build")]);
+    project(-20, { name: "Pilot run, control board build", target: D(45), criticality: "Low", owner: "Maya Chen", site: "Pilot Line" },
+      [byReason("Control board build for the pilot run"), byReason("Prototype build, harness run"), byReason("Pilot batch of brackets")]);
+
     // Supplier documents. Set last, so the demo records above were built while every document was valid.
     P.REF.suppliers.forEach(function (sp, i) {
       ["quality", "origin", "subtier"].forEach(function (k, j) { s.docs[sp.id][k] = D(120 + ((i * 7 + j * 5) * 29) % 260); });

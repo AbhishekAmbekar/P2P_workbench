@@ -56,6 +56,10 @@
       '<label>Site<select name="site">' + REF.sites.map(function (x) { return "<option>" + esc(x) + "</option>"; }).join("") + "</select></label>" +
       '<label>Cost center<select name="costCenter">' + REF.costCenters.map(function (x) { return "<option>" + esc(x) + "</option>"; }).join("") + "</select></label>" +
       '<label class="wide">Reason<textarea name="reason" placeholder="Why is this needed?"></textarea></label>' +
+      '<label class="wide">For project (optional)<select name="projectId"><option value="">None, everyday buying</option>' +
+      (App.state.projects || []).filter(function (p) { return p.status === "Open"; }).map(function (p) {
+        return '<option value="' + p.id + '">' + esc(p.id + "  " + p.name + ", target " + p.target) + "</option>";
+      }).join("") + "</select></label>" +
       '<div class="wide"><div id="reqPreview" class="note"></div>' +
       '<div class="actions"><button type="submit">Submit for approval</button>' +
       '<button type="button" class="ghost" data-act="reqToggle">Cancel</button></div></div></form></div>';
@@ -116,7 +120,8 @@
       ["Request", r.id], ["PR number", r.prNo || "Issued after final approval"], ["Requester", r.requester],
       ["Item", it.id + "  " + it.name], ["Category", it.category], ["Quantity", r.qty + " " + r.uom],
       ["Estimated unit price", App.money(r.estUnit)], ["Approved value", App.money(total)],
-      ["Need by", r.needBy], ["Site", r.site], ["Cost center", r.costCenter], ["Reason", r.reason]
+      ["Need by", r.needBy], ["Site", r.site], ["Cost center", r.costCenter], ["Reason", r.reason],
+      ["Project", r.projectId ? r.projectId + "  " + ((App.state.projects || []).find(function (p) { return p.id === r.projectId; }) || {}).name : "None"]
     ];
     var html = '<div class="card"><h3>' + r.id + (r.prNo ? " / " + r.prNo : "") + " " + App.status(r.status) + App.recBtn(r.id) + "</h3>" +
       '<div class="form" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' + rows.map(function (x) {
@@ -129,7 +134,7 @@
     });
 
     // what the current role can do here
-    var acts = "";
+    var acts = App.projectPicker ? App.projectPicker(r.id, r.projectId) : "";
     if (r.status === "Pending approval" && step) {
       if (step.role === App.role) {
         acts += '<label class="hint" style="display:block;margin-top:10px">Comment (required when rejecting)</label>' +

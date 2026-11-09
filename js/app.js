@@ -10,7 +10,8 @@
     P: P, REF: REF, state: null, role: "buyer", tab: "dashboard",
     views: {}, actions: {}, sel: {}, tabs: [
       { id: "dashboard", label: "Dashboard" },
-      { id: "requests", label: "Requests and PRs", group: "Request" },
+      { id: "projects", label: "Projects", group: "Request" },
+      { id: "requests", label: "Requests and PRs" },
       { id: "rfx", label: "RFx", group: "Source" },
       { id: "contracts", label: "Contracts" },
       { id: "pos", label: "Purchase orders", group: "Order" },
@@ -40,6 +41,7 @@
   var STATUS_KIND = {
     Released: "ok", "Sent back": "bad", Waiting: "info", "Not yet": "mut",
     Active: "ok", "Used up": "warn", Expired: "bad", "Not started": "mut",
+    Ready: "ok", "On track": "info", "At risk": "warn", Blocked: "bad", Empty: "mut", High: "bad", Medium: "warn", Low: "mut",
     "Pending approval": "info", Approved: "ok", Rejected: "bad", Cancelled: "mut", Sourcing: "info", Awarded: "ok", Ordered: "ok",
     Service: "mut", "In progress": "info", Consumed: "ok", Submitted: "info",
     Open: "info", "Technical review": "warn", Evaluating: "warn", "Award pending approval": "info", Pending: "mut", "Not reviewed": "mut",
@@ -92,6 +94,9 @@
       if (!App.state.seq.SES) App.state.seq.SES = 7000;
       // Saved before contracts had their own records: turn the old fixed contract prices into approved contracts.
       P.migrateContracts(App.state, App.now());
+      // Saved before projects existed: start with none. A request without projectId simply has no project.
+      if (!App.state.projects) App.state.projects = [];
+      if (!App.state.seq.PRJ) App.state.seq.PRJ = 9000;
       // Suppliers added since the data was saved get documents valid for one year from today.
       // This also replaces the 9999-12-31 placeholder an earlier version saved for them.
       var yearOut = P.addDays(App.today(), 365);
@@ -251,7 +256,7 @@
     }
     // A record number at the start of a table cell becomes a link to its full page, on every screen.
     // Clicking the link opens the record page. Clicking elsewhere on the row still opens the quick panel.
-    html = html.replace(/<td>((?:REQ|PR|RFX|PO|GRN|INV|SES|CT)-\d{4})(?=[<\s])/g,
+    html = html.replace(/<td>((?:REQ|PR|RFX|PO|GRN|INV|SES|CT|PRJ)-\d{4})(?=[<\s])/g,
       '<td class="nw"><a class="rec" href="#$1" data-act="rec" data-id="$1">$1</a>');
     // Dates in table cells stay on one line instead of breaking at the hyphen.
     html = html.replace(/<td>(\d{4}-\d\d-\d\d)<\/td>/g, '<td class="nw">$1</td>');

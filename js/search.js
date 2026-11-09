@@ -20,6 +20,7 @@
     dashboard: "home overview kpi budget spend my work",
     requests: "pr prs requisition requisitions purchase request approvals approve",
     rfx: "rfq rfp quote quotes sourcing bid bids tender award",
+    projects: "project projects job jobs overhaul shutdown work order turnaround readiness gating",
     contracts: "contract contracts rate contract agreement outline blanket order release releases call off cap",
     pos: "po pos purchase order orders release",
     expedite: "chase late overdue follow up supplier email",
@@ -65,6 +66,11 @@
         sub: e.qty + " " + (it.uom || "") + "s " + e.period + " · " + sp.name + " · " + money(e.value), status: e.status,
         words: [e.id, e.poId, sp.name, it.id, it.name, e.period, e.status, e.status === "Submitted" ? "waiting release service entry" : "service entry", e.note].join(" ") });
     });
+    (s.projects || []).forEach(function (p) {
+      out.push({ kind: "Project", id: p.id, open: p.id, tab: "projects", title: p.id + " · " + p.name,
+        sub: "Target " + p.target + " · " + p.criticality + " criticality · " + p.owner, status: p.status,
+        words: [p.id, p.name, p.owner, p.site, p.note, p.criticality, "project job"].join(" ") });
+    });
     (s.contracts || []).forEach(function (c) {
       var sp = sup(c.supplierId), items = c.lines.map(function (l) { return item(l.itemId); });
       out.push({ kind: "Contract", id: c.id, open: c.id, tab: "contracts", title: c.id + " · " + c.title,
@@ -108,7 +114,7 @@
       else total += 5;
     }
     // On a tie, the documents people look up most come first.
-    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1, Contract: 3 }[e.kind] || 0);
+    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1, Contract: 3, Project: 4 }[e.kind] || 0);
   }
 
   // Returns up to LIMIT matches, best first. Records with the same score keep the newest first.
