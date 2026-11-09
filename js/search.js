@@ -66,6 +66,10 @@
         sub: e.qty + " " + (it.uom || "") + "s " + e.period + " · " + sp.name + " · " + money(e.value), status: e.status,
         words: [e.id, e.poId, sp.name, it.id, it.name, e.period, e.status, e.status === "Submitted" ? "waiting release service entry" : "service entry", e.note].join(" ") });
     });
+    REF.items.forEach(function (it) {
+      out.push({ kind: "Item", id: it.id, open: it.id, tab: "requests", title: it.id + " · " + it.name, sub: it.category + " · item card", status: "",
+        words: [it.id, it.name, it.category, "item card part material service guide lessons"].join(" ") });
+    });
     (s.projects || []).forEach(function (p) {
       out.push({ kind: "Project", id: p.id, open: p.id, tab: "projects", title: p.id + " · " + p.name,
         sub: "Target " + p.target + " · " + p.criticality + " criticality · " + p.owner, status: p.status,
@@ -114,7 +118,7 @@
       else total += 5;
     }
     // On a tie, the documents people look up most come first.
-    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1, Contract: 3, Project: 4 }[e.kind] || 0);
+    return total + ({ Supplier: 5, PO: 4, Request: 3, RFx: 3, Screen: 3, Invoice: 2, Receipt: 1, Service: 1, Contract: 3, Project: 4, Item: 2 }[e.kind] || 0);
   }
 
   // Returns up to LIMIT matches, best first. Records with the same score keep the newest first.

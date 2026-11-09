@@ -74,7 +74,7 @@
       "<th>Held by</th><th>Expected</th><th>State</th>" + (canEdit ? "<th></th>" : "") + "</tr>" +
       st.rows.map(function (row) {
         var r = row.request, ref = r.poId || r.prNo || r.id;
-        return "<tr" + (st.gating && st.gating.request.id === r.id ? ' class="gate"' : "") + "><td><b>" + esc(row.item.name) + '</b><div class="muted">' +
+        return "<tr" + (st.gating && st.gating.request.id === r.id ? ' class="gate"' : "") + "><td><b>" + App.itemLink(row.item.id, row.item.name) + '</b><div class="muted">' +
           App.recLink(ref) + " · " + r.qty + " " + esc(r.uom) + (row.service && r.qty !== 1 ? "s" : "") + (row.po ? " · " + esc(App.supplier(row.po.supplierId).name) : "") + "</div></td>" +
           steps(row) + "<td>" + esc(row.holder) + (row.ready ? "" : '<div class="muted">' + row.since + " day" + (row.since === 1 ? "" : "s") + " since it last moved</div>") + "</td>" +
           '<td class="nowrap">' + (row.ready ? (row.note ? '<span style="white-space:normal">' + esc(row.note) + "</span>" : "In place") :

@@ -321,3 +321,11 @@ tr.gate td{background:#fff7ed}
 .pcounts{padding-bottom:0;display:flex;flex-wrap:wrap;gap:6px}
 .pmap td:nth-child(8),.pmap td:nth-child(9){min-width:120px}
 .pmap .stgcell{padding-left:2px;padding-right:2px}
+/* Item card */
+.lesson{padding:10px 16px;border-bottom:1px solid var(--line)}
+.lesson:last-child{border-bottom:0}
+.lhead{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:4px}
+.lbody{line-height:1.55;margin-bottom:4px}
+.asklist{margin:0;padding:14px 16px 14px 34px;line-height:1.7}
+.drawing svg{width:100%;height:auto;max-height:250px;display:block}
+.lessonform{border-bottom:1px solid var(--line);padding-bottom:12px}

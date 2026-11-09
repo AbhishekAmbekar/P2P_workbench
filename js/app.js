@@ -96,7 +96,9 @@
       P.migrateContracts(App.state, App.now());
       // Saved before projects existed: start with none. A request without projectId simply has no project.
       if (!App.state.projects) App.state.projects = [];
-      if (!App.state.deliveries) App.state.deliveries = [];   // no history from before; receipts in the app still count
+      if (!App.state.deliveries) App.state.deliveries = [];
+      if (!App.state.lessons) App.state.lessons = [];
+      if (!App.state.seq.LES) App.state.seq.LES = 1100;   // no history from before; receipts in the app still count
       if (!App.state.seq.PRJ) App.state.seq.PRJ = 9000;
       // Suppliers added since the data was saved get documents valid for one year from today.
       // This also replaces the 9999-12-31 placeholder an earlier version saved for them.

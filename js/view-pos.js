@@ -108,7 +108,7 @@
         ["Waiting for release", ss.waitingQty + " " + u + ", " + App.money(ss.waiting)], ["Remaining", ss.leftQty + " " + u + ", " + App.money(ss.remaining)],
         ["Service period ends", po.needBy]);
     }
-    var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + " " + (c.status !== "Delivered" ? App.status(c.status) : "") + App.recBtn(po.id) + "</h3>" +
+    var h = '<div class="card"><h3>' + po.id + " " + App.status(st) + " " + (c.status !== "Delivered" ? App.status(c.status) : "") + App.recBtn(po.id) + App.itemBtn(po.itemId) + "</h3>" +
       '<div class="form" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' + rows.map(function (x) {
         return '<div><div class="hint">' + esc(x[0]) + "</div><div>" + esc(x[1]) + "</div></div>";
       }).join("") + "</div>";

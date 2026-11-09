@@ -5,8 +5,10 @@
   "use strict";
   var App = window.App, P = App.P, REF = App.REF, esc = App.esc, money = App.money;
 
-  var ID = /^(REQ|PR|RFX|PO|GRN|INV|SES|CT|PRJ)-\d+$/;
-  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services", CT: "contracts", PRJ: "projects" };
+  // Record numbers, plus item numbers, whose page is the item card (view-items.js).
+  var ID = /^((REQ|PR|RFX|PO|GRN|INV|SES|CT|PRJ)-\d+|(RM|PK|CP|MR|SV)-\d{3})$/;
+  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services", CT: "contracts", PRJ: "projects",
+    RM: "requests", PK: "requests", CP: "requests", MR: "requests", SV: "requests" };
   var day = function (iso) { return iso ? P.longDate(iso) : ""; };
   var n = function (x) { return Number(x).toLocaleString("en-US"); };
 
@@ -122,7 +124,7 @@
       facts: [["Value", money(P.requestTotal(r))], ["Quantity", n(r.qty) + " " + esc(r.uom)], ["Need by", day(r.needBy)],
         ["Cost center", esc(r.costCenter.split(" ")[0])], ["Status", esc(r.status)], ["Waiting on", next && r.status === "Pending approval" ? esc(P.roleLabel(next.role)) : "Nobody"]]
     }) + '<div class="page"><div class="secs">' +
-      section("Details", '<div class="pad">' + dl([["Item", esc(it.id + " " + it.name)], ["Estimated unit price", money(r.estUnit)], ["Standard price", money(P.refPrice(it))],
+      section("Details", '<div class="pad">' + dl([["Item", App.itemLink(it.id, it.id + " " + it.name)], ["Estimated unit price", money(r.estUnit)], ["Standard price", money(P.refPrice(it))],
         ["Deliver to", esc(r.site)], ["Cost center", esc(r.costCenter)], ["Requester", esc(r.requester)], ["Reason", esc(r.reason)], ["Raised", day(r.createdAt)],
         ["Project", f.project ? App.recLink(f.project.id) + " " + esc(f.project.name) : '<span class="muted">None</span>'],
         ["Sourcing", f.contract ? "Release of " + App.recLink(f.contract.id) : f.rfx ? "RFx " + App.recLink(f.rfx.id) : f.po ? esc(f.po.source) + " buy" : esc(App.route(r))]]) + "</div>") +
@@ -182,7 +184,7 @@
         [["PO value", money(P.poTotal(po))], ["Unit price", money(po.unitPrice)], ["Promised", day(po.promisedDate) + (po.confirmed ? "" : ' <span class="pill info">Unconfirmed</span>')],
         ["Need by", day(po.needBy)], ["Received", n(t.accepted) + " of " + n(po.qty)], ["Invoiced", money(invoiced)]]
     }) + '<div class="page"><div class="secs">' +
-      section("Details", '<div class="pad">' + dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status) + " · rating " + sp.quality], ["Item", esc(it.id + " " + it.name)],
+      section("Details", '<div class="pad">' + dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status) + " · rating " + sp.quality], ["Item", App.itemLink(it.id, it.id + " " + it.name)],
         ["Quantity", n(po.qty) + " " + esc(it.uom) + (f.service && po.qty !== 1 ? "s" : "")], ["Deliver to", esc(po.site)], ["Cost center", esc(f.request.costCenter)], ["Requester", esc(f.request.requester)],
         ["Source", esc(po.source) + (po.rfxId ? " " + App.recLink(po.rfxId) : "") + (po.contractId ? ", release of " + App.recLink(po.contractId) : "")],
         ["Project", f.project ? App.recLink(f.project.id) + " " + esc(f.project.name) : '<span class="muted">None</span>'], ["Payment terms", "Net " + sp.terms], ["Issued", day(po.createdAt)],
@@ -217,7 +219,7 @@
       facts: [["Quantity", n(g.qty) + " " + esc(it.uom)], ["Result", esc(g.result)], ["Date", day(g.date)], ["PO quantity", n(po.qty)],
         ["Still due on PO", n(P.leftToReceive(App.state, po))], ["Deliver to", esc(po.site)]]
     }) + '<div class="page"><div class="secs">' +
-      section("Receipt", '<div class="pad">' + dl([["PO", App.recLink(po.id)], ["Item", esc(it.id + " " + it.name)], ["Note", esc(g.note)],
+      section("Receipt", '<div class="pad">' + dl([["PO", App.recLink(po.id)], ["Item", App.itemLink(it.id, it.id + " " + it.name)], ["Note", esc(g.note)],
         ["Quality decision", esc(g.releaseNote || (g.result === "Hold" ? "Waiting for Quality" : ""))], ["Posted by", esc(P.roleLabel(g.by))]]) + "</div>") +
       section("All receipts on " + po.id, table(["Receipt", "Date", "#Qty", "Result"], f.grns.map(function (x) {
         return [x.id === g.id ? "<b>" + x.id + "</b>" : App.recLink(x.id), day(x.date), n(x.qty), App.status(x.result)];
@@ -299,6 +301,7 @@
 
   App.recordPage = function (id) {
     var kind = id.split("-")[0];
+    if (App.isItemId && App.isItemId(id)) return App.itemPage(id);
     if (kind === "PRJ") {
       var pj = (App.state.projects || []).find(function (x) { return x.id === id; });
       return pj ? projectPage(pj) : '<div class="band"><h2>' + esc(id) + ' not found</h2><p class="bandsub">There is no project with that number in this workspace.</p></div>';

@@ -264,6 +264,21 @@
     project(-20, { name: "Pilot run, control board build", target: D(45), criticality: "Low", owner: "Maya Chen", site: "Pilot Line" },
       [byReason("Control board build for the pilot run"), byReason("Prototype build, harness run"), byReason("Pilot batch of brackets")]);
 
+    // S. Lessons learned, logged by the people who saw the failure. Failed technical reviews and receipt problems feed the
+    //    item card on their own; these are the ones someone wrote down.
+    P.addLesson(s, "engineering", T(-150), { itemId: "MR-203", kind: "Failure in use", source: "Work order from March",
+      what: "The rebuilt seal on pump P-204 leaked after 3 weeks.", why: "The kit came with O-rings rated to 80 C. The pump runs at 90 C, so they hardened.",
+      next: "State the liquid temperature on the request and ask the supplier for O-rings rated to 120 C or more." });
+    P.addLesson(s, "quality", T(-1), { itemId: "PK-102", kind: "Receipt or quality check", source: "GRN-5003",
+      what: "Three rolls were thinner than the spec at incoming inspection.", why: "Not known yet. The supplier is checking its line settings.",
+      next: "Ask for the thickness test report with each lot, and check three rolls per lot until the supplier confirms the cause." });
+    P.addLesson(s, "requester", T(-25), { itemId: "SV-502", kind: "Supplier", source: "PO-4009",
+      what: "The crane arrived without mats for its outriggers and the yard ground was soft.", why: "The order did not say the ground was unpaved.",
+      next: "Tell the crane supplier the ground type and the lift weight when booking, and ask them to bring outrigger mats." });
+    P.addLesson(s, "engineering", T(-1, 18), { itemId: "CP-202", kind: "Technical review", source: "RFX-3003",
+      what: "One offer quoted board revision B. The spec calls for revision C, which adds a fuse.", why: "The supplier quoted from an old drawing.",
+      next: "Put the drawing number and revision on the request and in the RFx, and ask suppliers to quote the revision they will build." });
+
     // Supplier documents. Set last, so the demo records above were built while every document was valid.
     P.REF.suppliers.forEach(function (sp, i) {
       ["quality", "origin", "subtier"].forEach(function (k, j) { s.docs[sp.id][k] = D(120 + ((i * 7 + j * 5) * 29) % 260); });

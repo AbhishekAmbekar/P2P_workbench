@@ -49,8 +49,8 @@
       docs[sp.id] = { quality: "9999-12-31", origin: "9999-12-31", subtier: "9999-12-31" };
     });
     return {
-      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000, PRJ: 9000 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], deliveries: [], audit: [], docs: docs, contacts: {}
+      seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000, PRJ: 9000, LES: 1100 },
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], deliveries: [], lessons: [], audit: [], docs: docs, contacts: {}
     };
   }
 
@@ -652,6 +652,66 @@
 
   // Where one request of a project stands: the step it waits at, who holds it, since when, the date it should be ready,
   // and how that date compares with the project target.
+  // ---------- item knowledge: lessons learned ----------
+  // What went wrong with an item before, so the next request, RFx and receipt get it right. Engineering, Quality and the
+  // Requester log lessons; failed technical reviews and rejected or held receipts feed in on their own.
+  var LESSON_ROLES = ["engineering", "quality", "requester"];
+  var LESSON_KINDS = ["Technical review", "Receipt or quality check", "Failure in use", "Supplier", "Other"];
+  var lesOf = function (s) { if (!s.lessons) s.lessons = []; if (!s.seq.LES) s.seq.LES = 1100; return s.lessons; };
+
+  function addLesson(s, role, now, f) {
+    need(role, LESSON_ROLES);
+    var it = item(f.itemId || fail("Choose the item the lesson is about."));
+    if (LESSON_KINDS.indexOf(f.kind) < 0) fail("Choose what kind of lesson it is.");
+    var what = (f.what || "").trim(), why = (f.why || "").trim(), next = (f.next || "").trim(), source = (f.source || "").trim();
+    if (what.length < 10) fail("Say what happened, in a sentence.");
+    if (why.length < 5) fail("Say why it happened, if it is known. Write \"Not known yet\" if it is not.");
+    if (next.length < 10) fail("Say what to do next time. That is the part the next person needs.");
+    if (source.length > 40) fail("Keep the source short, such as a record number.");
+    var l = { id: nextId(s, "LES", "LES"), itemId: it.id, kind: f.kind, what: what, why: why, next: next, source: source, by: role, at: now };
+    lesOf(s).push(l);
+    log(s, now, role, it.id, "Lesson logged on " + it.id + ": " + f.kind, next);
+    return l;
+  }
+
+  // Everything known about an item: logged lessons, failed technical reviews, rejected or held receipts, what was bought.
+  function itemKnowledge(s, itemId) {
+    var it = item(itemId);
+    var reqs = s.requests.filter(function (r) { return r.itemId === itemId; });
+    var reviews = [];
+    reqs.forEach(function (r) {
+      if (!r.rfxId) return;
+      var x = getRfx(s, r.rfxId);
+      x.quotes.forEach(function (q) {
+        if (q.tech && q.tech.result === "Not acceptable") reviews.push({ rfxId: x.id, supplierId: q.supplierId, note: q.tech.note, by: q.tech.by, at: q.tech.at });
+      });
+    });
+    var pos = s.pos.filter(function (po) { return po.itemId === itemId && !po.cancelled; });
+    var receipts = [];
+    pos.forEach(function (po) {
+      s.grns.forEach(function (g) {
+        if (g.poId === po.id && g.result !== "Accepted") receipts.push({ grnId: g.id, poId: po.id, supplierId: po.supplierId, result: g.result, note: g.note, at: g.at });
+      });
+    });
+    var byDate = function (a, b) { return a.at < b.at ? 1 : -1; };
+    return { item: it, lessons: lesOf(s).filter(function (l) { return l.itemId === itemId; }).sort(byDate),
+      reviews: reviews.sort(byDate), receipts: receipts.sort(byDate), pos: pos.slice().sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; }),
+      requests: reqs.length };
+  }
+
+  // Items in the master that may be the same part under another number: same category and at least two shared words,
+  // or a link written into the item guide.
+  var STOP = { with: 1, and: 1, the: 1, for: 1, per: 1 };
+  function similarItems(itemId, sameAs) {
+    var it = item(itemId), words = function (n) { return n.toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length > 2 && !STOP[w]; }); };
+    var mine = words(it.name);
+    return REF.items.filter(function (o) {
+      if (o.id === it.id || o.category !== it.category) return false;
+      if ((sameAs || []).indexOf(o.id) >= 0) return true;
+      return words(o.name).filter(function (w) { return mine.indexOf(w) >= 0; }).length >= 2;
+    });
+  }
+
   // ---------- supplier delivery record ----------
   // How a supplier's deliveries compared with what it promised. Counts receipts in this workspace and delivery history
   // brought in from before it (state.deliveries: { supplierId, ref, promised, received }). Services have no delivery.
@@ -1452,6 +1512,7 @@
     createContract: createContract, decideContract: decideContract, contractChain: contractChain, contractStatus: contractStatus,
     contractFor: contractFor, refPriceAt: refPriceAt,
     deliveryRecord: deliveryRecord, plannedDate: plannedDate,
+    addLesson: addLesson, itemKnowledge: itemKnowledge, similarItems: similarItems, LESSON_KINDS: LESSON_KINDS, LESSON_ROLES: LESSON_ROLES,
     createProject: createProject, linkToProject: linkToProject, projectStatus: projectStatus, CRITICALITY: CRITICALITY, PROJECT_STAGES: STAGES, migrateContracts: migrateContracts, CT_WARN_DAYS: CT_WARN_DAYS,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,

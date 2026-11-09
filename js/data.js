@@ -118,6 +118,7 @@
       { id: "CP-201", name: "Steel support rail, 3 m", category: "Components", uom: "ea", stdPrice: 38.00, needsQuality: false, needsEngineering: false },
       { id: "CP-202", name: "Motor control board", category: "Components", uom: "ea", stdPrice: 640.00, needsQuality: false, needsEngineering: true },
       { id: "MR-203", name: "Pump seal overhaul kit", category: "MRO", uom: "kit", stdPrice: 910.00, needsQuality: false, needsEngineering: false },
+      { id: "MR-209", name: "Seal kit, pump P-204, carbon and silicon carbide faces", category: "MRO", uom: "kit", stdPrice: 935.00, needsQuality: false, needsEngineering: false },
       { id: "CP-301", name: "Power cable assembly", category: "Components", uom: "ea", stdPrice: 76.00, needsQuality: false, needsEngineering: true },
       { id: "CP-302", name: "Forged steel bracket", category: "Components", uom: "ea", stdPrice: 24.50, needsQuality: false, needsEngineering: false },
       { id: "CP-303", name: "Connector kit", category: "Components", uom: "kit", stdPrice: 11.80, needsQuality: false, needsEngineering: true },
