@@ -47,6 +47,10 @@
           "<b>Price against reference.</b> Each item has a contract or standard price. A PO more than 10% above it needs a written reason. Any PO above it is counted on the dashboard.",
           "<b>Fix owners.</b> Price gaps go to the Buyer. Quantity over billing and missing receipts go to the Warehouse, or for a service, to whoever releases next when work is waiting and to the Requester when nothing has been recorded. Short billing and duplicates stay with Accounts Payable."
         ])) +
+      section("Projects",
+        "<p>Some work needs several purchases to come together by one date: a pump overhaul, a shutdown, a product launch. A project groups those requests and shows them as one job. Everyday buying needs no project.</p>" +
+        "<p>The Requester creates a project with a name, a target date and a criticality: High if a slip stops a line or a customer date, Medium or Low otherwise. A downtime cost per day is optional, because it usually comes from production planning or plant finance. Without it the app shows the delay in days and never makes up a figure.</p>" +
+        "<p>A request joins a project when it is raised, or later from its panel. Its RFx, PO, receipts, service entries and invoices follow it. The project shows each item's step, who holds it, how long since it last moved, and the date it should be in place. An item is late if that date is after the target, at risk within 5 days of it, and blocked on a quality hold or a rejection. Items not yet ordered use their need by date. The latest item that is not ready is the one holding the project up.</p>") +
       section("Delivery health",
         "<p>For every open PO, slack is the need by date minus the supplier promise date. Under 5 days is At Risk. Below zero is Late. Move a promise date on the PO screen to see the status change.</p>") +
       section("Expedite and email drafts",

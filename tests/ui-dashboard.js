@@ -45,7 +45,7 @@ test("focusing a bar shows its value in a tooltip", () => {
 test("clicking a delivery state opens Purchase orders on that slice", () => {
   click($$("#view .ch-key").find(k => k.textContent.indexOf("At risk") >= 0));
   check(w.App.tab === "pos" && w.App.sel.poFilter === "risk", "risk filter");
-  check($$("#view tr[data-id]").length === 3, "three late or at risk POs");
+  check($$("#view tr[data-id]").length === 4, "four late or at risk POs");
 });
 
 test("the Director and VP get the oversight home", () => {

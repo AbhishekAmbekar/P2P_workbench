@@ -5,8 +5,8 @@
   "use strict";
   var App = window.App, P = App.P, REF = App.REF, esc = App.esc, money = App.money;
 
-  var ID = /^(REQ|PR|RFX|PO|GRN|INV|SES|CT)-\d+$/;
-  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services", CT: "contracts" };
+  var ID = /^(REQ|PR|RFX|PO|GRN|INV|SES|CT|PRJ)-\d+$/;
+  var HOME = { REQ: "requests", PR: "requests", RFX: "rfx", PO: "pos", GRN: "grn", INV: "invoices", SES: "services", CT: "contracts", PRJ: "projects" };
   var day = function (iso) { return iso ? P.longDate(iso) : ""; };
   var n = function (x) { return Number(x).toLocaleString("en-US"); };
 
@@ -28,10 +28,11 @@
   App.actions.rec = function (el, e) { if (e) e.preventDefault(); App.openRecord(el.dataset.id); };
   // Opens the record on its working screen, selected, so the actions there apply to it.
   App.actions.recWork = function (el) {
-    var id = el.dataset.id, kind = id.split("-")[0], f = kind === "CT" ? null : P.docFlow(App.state, id);
+    var id = el.dataset.id, kind = id.split("-")[0], f = kind === "CT" || kind === "PRJ" ? null : P.docFlow(App.state, id);
     if (kind === "GRN") App.go("grn", f.po.id);
     else if (kind === "SES") { App.sel.services = f.po.id; App.go("services"); }
     else if (kind === "CT") { App.sel.contracts = id; App.go("contracts"); }
+    else if (kind === "PRJ") { App.sel.projects = id; App.go("projects"); }
     else if (kind === "PR" || kind === "REQ") App.go("requests", f.request.id);
     else App.go(HOME[kind], kind === "INV" ? null : id);
   };
@@ -123,6 +124,7 @@
     }) + '<div class="page"><div class="secs">' +
       section("Details", '<div class="pad">' + dl([["Item", esc(it.id + " " + it.name)], ["Estimated unit price", money(r.estUnit)], ["Standard price", money(P.refPrice(it))],
         ["Deliver to", esc(r.site)], ["Cost center", esc(r.costCenter)], ["Requester", esc(r.requester)], ["Reason", esc(r.reason)], ["Raised", day(r.createdAt)],
+        ["Project", f.project ? App.recLink(f.project.id) + " " + esc(f.project.name) : '<span class="muted">None</span>'],
         ["Sourcing", f.contract ? "Release of " + App.recLink(f.contract.id) : f.rfx ? "RFx " + App.recLink(f.rfx.id) : f.po ? esc(f.po.source) + " buy" : esc(App.route(r))]]) + "</div>") +
       section("Approvals", table(["Step", "Role", "Decision", "When", "Comment"], r.approvals.map(function (a, i) {
         return [String(i + 1), esc(P.roleLabel(a.role)), App.status(a.status === "Pending" ? (next === a && r.status === "Pending approval" ? "Pending approval" : "Pending") : a.status), day(a.at), esc(a.comment)];
@@ -182,7 +184,8 @@
     }) + '<div class="page"><div class="secs">' +
       section("Details", '<div class="pad">' + dl([["Supplier", esc(sp.name) + " · " + App.status(sp.status) + " · rating " + sp.quality], ["Item", esc(it.id + " " + it.name)],
         ["Quantity", n(po.qty) + " " + esc(it.uom) + (f.service && po.qty !== 1 ? "s" : "")], ["Deliver to", esc(po.site)], ["Cost center", esc(f.request.costCenter)], ["Requester", esc(f.request.requester)],
-        ["Source", esc(po.source) + (po.rfxId ? " " + App.recLink(po.rfxId) : "") + (po.contractId ? ", release of " + App.recLink(po.contractId) : "")], ["Payment terms", "Net " + sp.terms], ["Issued", day(po.createdAt)],
+        ["Source", esc(po.source) + (po.rfxId ? " " + App.recLink(po.rfxId) : "") + (po.contractId ? ", release of " + App.recLink(po.contractId) : "")],
+        ["Project", f.project ? App.recLink(f.project.id) + " " + esc(f.project.name) : '<span class="muted">None</span>'], ["Payment terms", "Net " + sp.terms], ["Issued", day(po.createdAt)],
         ["Supplier email", esc(P.contactOf(s, sp.id)) || '<span class="muted">None saved</span>']]) + "</div>") +
       section("Price", '<div class="pad">' + dl([["Unit price", money(po.unitPrice) + " " + (po.refPrice ? App.pill((varPct > 0 ? varPct + "% above " : varPct < 0 ? Math.abs(varPct) + "% below " : "Equal to ") + (po.contractId ? "contract " : "standard ") + money(po.refPrice), varPct > 10 ? "bad" : varPct > 0 ? "warn" : "ok") : "")],
         ["Landed unit", money(P.landedUnit(po.unitPrice, po.tariffPct, po.freight)) + ' <span class="muted">tariff ' + (po.tariffPct || 0) + "%, freight " + money(po.freight || 0) + "</span>"],
@@ -284,8 +287,22 @@
       section("History", '<div class="pad">' + history([c.id].concat(st.pos.map(function (po) { return po.id; }))) + "</div>", "This contract and its releases") + "</div></div>";
   }
 
+  // A project page: the same facts and cards as the Projects screen, read only, with the project's history.
+  function projectPage(p) {
+    var b = App.projectBody(p);
+    return band({ home: "projects", id: p.id, title: p.id, flow: null,
+      pills: App.pill(b.st.state === "Empty" ? "No requests" : b.st.state, { Late: "bad", Blocked: "bad", "At risk": "warn", "On track": "info", Ready: "ok" }[b.st.state] || "mut") + " " + App.status(p.criticality),
+      sub: esc(p.name + " · " + p.owner + (p.site ? " · " + p.site : "")), facts: b.facts.map(function (f) { return [f[0], esc(f[1]), f[2]]; })
+    }) + '<div class="page">' + b.gate + '<div class="secs"' + (b.gate ? ' style="margin-top:12px"' : "") + ">" + b.cards +
+      section("History", '<div class="pad">' + history([p.id].concat(b.st.rows.map(function (r) { return r.request.id; }))) + "</div>", "This project and its requests", true) + "</div></div>";
+  }
+
   App.recordPage = function (id) {
     var kind = id.split("-")[0];
+    if (kind === "PRJ") {
+      var pj = (App.state.projects || []).find(function (x) { return x.id === id; });
+      return pj ? projectPage(pj) : '<div class="band"><h2>' + esc(id) + ' not found</h2><p class="bandsub">There is no project with that number in this workspace.</p></div>';
+    }
     if (kind === "CT") {
       var c = (App.state.contracts || []).find(function (x) { return x.id === id; });
       return c ? contractPage(c) : '<div class="band"><h2>' + esc(id) + ' not found</h2><p class="bandsub">There is no contract with that number in this workspace.</p></div>';

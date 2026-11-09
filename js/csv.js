@@ -200,6 +200,17 @@
         }));
     } },
 
+    projects: { file: "projects", label: "project items", build: function (s, now) {
+      var today = P.dateOf(now);
+      return [["Project", "Name", "Target", "Criticality", "Request", "PR", "PO", "Item", "Step", "Held by", "Expected", "State"]].concat(
+        [].concat.apply([], (s.projects || []).map(function (p) {
+          return P.projectStatus(s, p, today).rows.map(function (row) {
+            var r = row.request;
+            return [p.id, p.name, p.target, p.criticality, r.id, r.prNo || "", r.poId || "", row.item.id + " " + row.item.name,
+              P.PROJECT_STAGES[row.stage], row.holder, row.ready ? "" : row.expectedShown, row.state];
+          });
+        })));
+    } },
     contracts: { file: "contracts", label: "contracts", build: function (s, now) {
       var today = P.dateOf(now);
       return [["Contract", "Supplier", "Title", "Item", "Agreed rate", "Start", "End", "Cap", "Released", "Remaining", "Status", "Basis"]].concat(

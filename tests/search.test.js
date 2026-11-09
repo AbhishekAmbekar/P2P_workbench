@@ -34,7 +34,12 @@ test("an invoice is found by the supplier's own invoice number", () => {
 
 test("part of a number lists every record that starts with it, newest first", () => {
   const r = ids("po-40").filter(x => /^PO-/.test(x));
-  assert.deepStrictEqual(r, ["PO-4010", "PO-4009", "PO-4008", "PO-4007", "PO-4006", "PO-4005", "PO-4004", "PO-4003", "PO-4002", "PO-4001"]);
+  assert.deepStrictEqual(r, ["PO-4013", "PO-4012", "PO-4011", "PO-4010", "PO-4009", "PO-4008", "PO-4007", "PO-4006", "PO-4005", "PO-4004", "PO-4003", "PO-4002", "PO-4001"]);
+});
+
+test("a project number, its name or the word project finds projects", () => {
+  assert.strictEqual(ids("prj-9001")[0], "PRJ-9001");
+  assert.strictEqual(ids("pump overhaul")[0], "PRJ-9001");
 });
 
 test("a contract number or the word contract finds contracts", () => {
@@ -50,7 +55,7 @@ test("a supplier name finds the supplier first, then its orders and sourcing", (
 });
 
 test("delivery health and status words find the matching records", () => {
-  assert.deepStrictEqual(ids("late").filter(x => /^PO-/.test(x)), ["PO-4006"]);
+  assert.deepStrictEqual(ids("late").filter(x => /^PO-/.test(x)).sort(), ["PO-4006", "PO-4011"]);
   assert.deepStrictEqual(ids("at risk").sort(), ["PO-4001", "PO-4007"]);
   assert.ok(ids("hold").indexOf("GRN-5003") >= 0);
   assert.ok(ids("exception").indexOf("INV-6002") >= 0);

@@ -20,7 +20,7 @@ test("Accounts Payable works on invoices and follows contracts, POs, receipts an
   check(group("Your work").join() === "invoices", "work " + group("Your work"));
   check(group("View only").join() === "contracts,pos,grn,services,suppliers,audit", "view " + group("View only"));
   check($('#tabs .navmore'), "more screens toggle");
-  check($$("#tabs button.more.hid").length === 3, "three folded screens");
+  check($$("#tabs button.more.hid").length === 4, "four folded screens, including Projects");
 });
 
 test("More screens opens the folded sections, so nothing is hidden for good", () => {
@@ -28,7 +28,7 @@ test("More screens opens the folded sections, so nothing is hidden for good", ()
   check($$("#tabs button.more.hid").length === 0, "unfolded");
   check($('#tabs .navmore').getAttribute("aria-expanded") === "true");
   click($("#tabs .navmore"));
-  check($$("#tabs button.more.hid").length === 3, "folded again");
+  check($$("#tabs button.more.hid").length === 4, "folded again");
 });
 
 test("opening a folded screen keeps the group open and marks it view only", () => {
@@ -47,7 +47,7 @@ test("a role's own screens show no view only line", () => {
 test("the VP follows everything and works only on approvals and releases", () => {
   role("executive");
   check(group("Your work").join() === "requests,rfx,contracts,services", "work, including contract approval and service release " + group("Your work"));
-  check(group("View only").length === 6, "view " + group("View only"));
+  check(group("View only").length === 7, "view " + group("View only"));
   check(!$("#tabs .navmore"), "nothing folded for the VP");
   tab("pos");
   check(band().indexOf("You are working as Executive, so this screen is for reading") >= 0);
@@ -56,7 +56,7 @@ test("the VP follows everything and works only on approvals and releases", () =>
 test("the Manager follows every screen like the Director and VP, and gets Oversight", () => {
   role("manager");
   check(group("Your work").join() === "requests,services", "work, including service release " + group("Your work"));
-  check(group("View only").length === 8, "view " + group("View only"));
+  check(group("View only").length === 9, "view " + group("View only"));
   role("director"); const dir = group("Your work").concat(group("View only")).sort().join();
   role("manager");
   check(group("Your work").concat(group("View only")).sort().join() === dir, "same screens as the Director");
@@ -69,7 +69,7 @@ test("each role opens Requests on its own slice", () => {
   role("requester"); tab("requests");
   check(rows().sort().join() === "REQ-1001,REQ-1008,REQ-1010,REQ-1014,REQ-1015", "mine, including her technician hours request " + rows());
   role("manager"); tab("requests");
-  check(rows().join() === "REQ-1012", "waiting on manager " + rows());
+  check(rows().sort().join() === "REQ-1012,REQ-1021", "waiting on manager " + rows());
   role("director"); tab("requests");
   check(rows().join() === "REQ-1006", "waiting on director " + rows());
   role("buyer"); tab("requests");
@@ -79,22 +79,22 @@ test("each role opens Requests on its own slice", () => {
 test("a filter picked by hand stays until the role changes", () => {
   role("manager"); tab("requests");
   clickText("#view button.small", "All");
-  check(rows().length === 17);
+  check(rows().length === 21);
   tab("pos"); tab("requests");
-  check(rows().length === 17, "kept");
+  check(rows().length === 21, "kept");
   role("requester"); role("manager");
-  check(rows().join() === "REQ-1012", "back to the role default");
+  check(rows().sort().join() === "REQ-1012,REQ-1021", "back to the role default");
 });
 
 test("the Warehouse opens Purchase orders on what is still due in", () => {
   role("warehouse"); tab("pos");
-  check(rows().sort().join() === "PO-4001,PO-4003,PO-4006,PO-4007", "open " + rows());
+  check(rows().sort().join() === "PO-4001,PO-4003,PO-4006,PO-4007,PO-4011,PO-4012", "open " + rows());
   clickText("#view button.small", "All");
-  check(rows().length === 10);
+  check(rows().length === 13);
   role("buyer"); tab("pos");
-  check(rows().length === 10, "buyer sees all");
+  check(rows().length === 13, "buyer sees all");
   clickText("#view button.small", "Late or at risk");
-  check(rows().sort().join() === "PO-4001,PO-4006,PO-4007", "risk " + rows());
+  check(rows().sort().join() === "PO-4001,PO-4006,PO-4007,PO-4011", "risk " + rows());
 });
 
 t.done();

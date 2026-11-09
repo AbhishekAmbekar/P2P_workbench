@@ -38,7 +38,7 @@ test("an awarded RFx creates a PO with the awarded supplier and price", () => {
   click(btn("Create PO"));
   check(text().indexOf("Awarded to Brightpath") >= 0 || text().indexOf("Brightpath Electronics at $219.00") >= 0, "award details missing");
   submit($('form[data-form="poCreate"]'));
-  check(toastText().indexOf("PO-4011") >= 0, "toast: " + toastText());
+  check(toastText().indexOf("PO-4014") >= 0, "toast: " + toastText());
   check(text().indexOf("Brightpath Electronics") >= 0 && text().indexOf("$13,140.00") >= 0, "PO detail wrong");
   check(text().indexOf("not confirmed") >= 0);
 });

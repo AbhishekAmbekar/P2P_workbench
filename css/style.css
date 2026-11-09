@@ -293,3 +293,31 @@ body.sp-on{overflow:hidden}
 /* Inside fixed cards a long first cell, such as an item name or an exception message, wraps instead of widening the card. */
 .secbody td:first-child{white-space:normal;min-width:7.5em}
 .secbody th,.secbody td{padding:8px 10px}
+/* Projects: step dots, the readiness bar, the gating row and the timeline. */
+.stgcell{text-align:center;padding-left:4px;padding-right:4px}
+.stg{display:inline-block;width:12px;height:12px;border-radius:50%;border:1.5px solid #9ca3af;background:var(--card);vertical-align:middle}
+.stg.done{background:var(--acc);border-color:var(--acc)}
+.stg.cur{width:14px;height:14px;border-width:3.5px}
+.stg.cur.bad{border-color:var(--bad)}.stg.cur.warn{border-color:var(--warn)}.stg.cur.info{border-color:var(--info)}.stg.cur.ok{border-color:var(--ok)}
+tr.gate td{background:#fff7ed}
+.gatenote{margin-top:12px}
+.pbar{display:flex;height:8px;min-width:120px;border-radius:4px;overflow:hidden;background:var(--line);margin-bottom:4px}
+.pbar i{display:block;height:100%}
+.pbar .ok{background:var(--ok)}.pbar .info{background:var(--info)}.pbar .warn{background:var(--warn)}.pbar .bad{background:var(--bad)}
+.tline{--tln:200px}
+.tl-axis{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-left:var(--tln);margin-bottom:6px}
+.tl-rows{position:relative;display:flex;flex-direction:column;gap:8px}
+.tl-row{display:flex;align-items:center;gap:0}
+.tl-name{width:var(--tln);flex:none;font-size:13px;padding-right:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-track{position:relative;flex:1;height:16px;background:var(--bg);border-radius:4px}
+.tl-bar{position:absolute;top:0;height:16px;border-radius:4px;border:1px solid}
+.tl-bar.ok{background:#bbf7d0;border-color:var(--ok)}.tl-bar.info{background:#dbeafe;border-color:var(--info)}
+.tl-bar.warn{background:#fde68a;border-color:var(--warn)}.tl-bar.bad{background:#fecaca;border-color:var(--bad)}
+.tl-target,.tl-today{position:absolute;top:-4px;bottom:-4px;width:0;z-index:1}
+.tl-target{border-left:2px solid var(--ink)}
+.tl-today{border-left:2px dashed var(--mut)}
+@media (max-width:640px){.tline{--tln:110px}}
+.pmap td:first-child{min-width:200px}
+.pcounts{padding-bottom:0;display:flex;flex-wrap:wrap;gap:6px}
+.pmap td:nth-child(8),.pmap td:nth-child(9){min-width:120px}
+.pmap .stgcell{padding-left:2px;padding-right:2px}
