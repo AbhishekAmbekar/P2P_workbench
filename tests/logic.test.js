@@ -735,6 +735,45 @@ test("project rows are ready when goods are received or a service is booked in t
   assert.deepStrictEqual([st.state, st.counts.Ready, st.gating, st.daysLate], ["Ready", 2, null, 0]);
 });
 
+test("a supplier's delivery record plans on its usual slip once it has three deliveries", () => {
+  const s = P.newState();
+  s.deliveries.push({ supplierId: "tidewater", ref: "A", promised: day(-90), received: day(-86) },
+    { supplierId: "tidewater", ref: "B", promised: day(-60), received: day(-58) });
+  let rec = P.deliveryRecord(s, "tidewater");
+  assert.deepStrictEqual([rec.n, rec.enough, rec.typicalSlip], [2, false, 0], "two deliveries are too few to plan on");
+  s.deliveries.push({ supplierId: "tidewater", ref: "C", promised: day(-30), received: day(-27) });
+  rec = P.deliveryRecord(s, "tidewater");
+  assert.deepStrictEqual([rec.n, rec.typicalSlip, rec.onTimePct], [3, 3, 0]);
+  s.deliveries.push({ supplierId: "atlas", ref: "D", promised: day(-30), received: day(-32) },
+    { supplierId: "atlas", ref: "E", promised: day(-20), received: day(-21) }, { supplierId: "atlas", ref: "F", promised: day(-10), received: day(-10) });
+  assert.strictEqual(P.deliveryRecord(s, "atlas").typicalSlip, 0, "an early supplier is planned on its promise, never earlier");
+  // Receipts in the app count too.
+  const r = baseReq(s, { itemId: "MR-401", qty: 5, estUnit: 58 });
+  approveAll(s, r);
+  const po = P.createPO(s, "buyer", NOW, r.id, { supplierId: "tidewater", unitPrice: 58, leadDays: 2 });
+  P.confirmPO(s, "buyer", NOW, po.id, day(2));
+  P.postGRN(s, "warehouse", at(9), po.id, { qty: 5, result: "Accepted" });
+  rec = P.deliveryRecord(s, "tidewater");
+  assert.deepStrictEqual([rec.n, rec.slips[3], rec.typicalSlip], [4, 7, 3]);
+  const r2 = baseReq(s, { itemId: "MR-203", qty: 1, estUnit: 910 });
+  approveAll(s, r2);
+  const po2 = P.createPO(s, "buyer", NOW, r2.id, { supplierId: "tidewater", unitPrice: 910, leadDays: 10 });
+  P.confirmPO(s, "buyer", NOW, po2.id, day(10));
+  const pd = P.plannedDate(s, po2);
+  assert.deepStrictEqual([pd.promised, pd.planned], [day(10), day(13)]);
+});
+
+test("a project plans on supplier records and flags bookings that would stand idle", () => {
+  const s = seed(NOW);
+  const st = P.projectStatus(s, s.projects[0], day(0));
+  const seal = st.rows.find(r => r.item.id === "MR-203");
+  assert.strictEqual(P.daysBetween(seal.promised, seal.expectedShown), 3, "the seal kit is planned 3 days after its promise");
+  assert.strictEqual(st.gating.item.id, "MR-203");
+  assert.deepStrictEqual(st.idle.map(r => r.item.id), ["SV-502"], "the crane is booked before the seal kit can arrive");
+  assert.ok(st.idle[0].idleDays > 0);
+  assert.strictEqual(st.delayCost, st.daysLate * 4200);
+});
+
 test("the seed has five projects, and the pump overhaul is held up by its seal kit", () => {
   const s = seed(NOW);
   assert.strictEqual(s.projects.length, 5);

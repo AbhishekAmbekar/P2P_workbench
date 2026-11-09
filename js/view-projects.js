@@ -29,6 +29,13 @@
     var rec = sel.value;
     App.run(function (s, role, now) { return P.linkToProject(s, role, now, rec, pid); }, rec + " added to " + pid + ".");
   };
+  // Open the gating PO's chase draft on Expedite.
+  App.actions.prjChase = function (el) {
+    var row = P.expediteList(App.state, App.now()).find(function (x) { return x.po.id === el.dataset.id; });
+    App.sel.chase = { poId: el.dataset.id, kind: row ? row.kind : "risk" };
+    App.sel.chaseDraft = null;
+    App.go("expedite");
+  };
   App.actions.prjUnlink = function (el) {
     var rec = el.dataset.id;
     App.run(function (s, role, now) { return P.linkToProject(s, role, now, rec, null); }, rec + " removed from the project.");
@@ -70,8 +77,11 @@
         return "<tr" + (st.gating && st.gating.request.id === r.id ? ' class="gate"' : "") + "><td><b>" + esc(row.item.name) + '</b><div class="muted">' +
           App.recLink(ref) + " · " + r.qty + " " + esc(r.uom) + (row.service && r.qty !== 1 ? "s" : "") + (row.po ? " · " + esc(App.supplier(row.po.supplierId).name) : "") + "</div></td>" +
           steps(row) + "<td>" + esc(row.holder) + (row.ready ? "" : '<div class="muted">' + row.since + " day" + (row.since === 1 ? "" : "s") + " since it last moved</div>") + "</td>" +
-          '<td class="nowrap">' + (row.ready ? (row.note ? esc(row.note) : "In place") : day(row.expectedShown) + (row.note ? '<div class="muted" style="white-space:normal">' + esc(row.note) + "</div>" : "")) + "</td>" +
-          "<td>" + App.pill(row.state, KIND[row.state]) + (st.gating && st.gating.request.id === r.id ? " " + App.pill("Gating", "bad") : "") + "</td>" +
+          '<td class="nowrap">' + (row.ready ? (row.note ? '<span style="white-space:normal">' + esc(row.note) + "</span>" : "In place") :
+            day(row.expectedShown) + (row.promised ? '<div class="muted">promised ' + day(row.promised) + ", usually " + row.slip + " d late</div>" :
+            row.note ? '<div class="muted" style="white-space:normal">' + esc(row.note) + "</div>" : "")) + "</td>" +
+          "<td>" + App.pill(row.state, KIND[row.state]) + (st.gating && st.gating.request.id === r.id ? " " + App.pill("Gating", "bad") : "") +
+            (row.idleDays ? " " + App.pill("Idle " + row.idleDays + " d", "warn") : "") + "</td>" +
           (canEdit ? '<td><button class="small ghost" data-act="prjUnlink" data-id="' + r.id + '">Remove</button></td>' : "") + "</tr>";
       }).join("") + "</table></div>";
   }
@@ -112,7 +122,14 @@
       gate = '<div class="note ' + (g.state === "At risk" ? "warn" : "bad") + ' gatenote"><b>Holding the project up: ' + esc(g.item.name) + " (" + App.recLink(ref) + ")</b><br>" +
         esc(g.holder) + ". Expected " + day(g.expectedShown) + (st.daysLate ? ", " + st.daysLate + " day" + (st.daysLate === 1 ? "" : "s") + " after the target" : "") + "." +
         (st.delayCost ? " At " + App.money(p.costPerDay).replace(/\.00$/, "") + " a day of downtime, that costs " + cost + "." :
-          st.daysLate && p.costPerDay === null ? " No downtime cost per day is set, so the delay is shown in days." : "") + "</div>";
+          st.daysLate && p.costPerDay === null ? " No downtime cost per day is set, so the delay is shown in days." : "") +
+        (g.promised ? "<br>Promised " + day(g.promised) + ". " + esc(App.supplier(g.po.supplierId).name) + " usually delivers " + g.slip + " day" + (g.slip === 1 ? "" : "s") +
+          " late (last " + g.recN + " deliveries), so the plan uses " + day(g.expectedShown) + "." : "") +
+        (st.idle.length ? "<br>Knock on effect: " + st.idle.map(function (r) {
+          return esc(r.item.name) + " is booked for " + day(r.po.promisedDate) + ", " + r.idleDays + " days before the rest can be ready. Move it, or it stands idle";
+        }).join(". ") + "." : "") +
+        (g.po && !g.service && App.role === "buyer" ? '<div class="actions" style="margin:8px 0 0"><button class="small" data-act="prjChase" data-id="' + g.po.id + '">Draft a chase to ' +
+          esc(App.supplier(g.po.supplierId).name) + "</button></div>" : g.po && !g.service ? '<div class="hint" style="margin-top:6px">The Buyer can draft a chase to the supplier from here.</div>' : "") + "</div>";
     }
     var addable = s.requests.filter(function (r) { return r.projectId !== p.id && r.status !== "Cancelled" && r.status !== "Rejected"; });
     var add = App.role === "requester" && p.status === "Open" && addable.length ?
@@ -132,7 +149,8 @@
         App.card("Timeline to the target date", timeline(p, st), "From request to in place", true) +
         App.card("About this project", about) +
         App.card("What a project covers", '<div class="pad"><p style="margin:0 0 8px">A project groups the requests that must come together by one date. Their RFx, POs, receipts, service entries and invoices follow them, so nobody tags each document.</p>' +
-          '<p style="margin:0" class="muted">States compare each item\'s expected date with the target: late after it, at risk within 5 days of it, blocked on a quality hold or a rejection. Items not yet ordered use their need by date.</p></div>') };
+          '<p style="margin:0 0 8px" class="muted">States compare each item\'s expected date with the target: late after it, at risk within 5 days of it, blocked on a quality hold or a rejection. Items not yet ordered use their need by date.</p>' +
+          '<p style="margin:0" class="muted">Expected dates for goods use the supplier\'s delivery record, not only its promise: once a supplier has 3 or more past deliveries, its usual slip is added. A booking made before the rest can be ready is flagged as idle.</p></div>') };
   };
 
   function newForm() {
