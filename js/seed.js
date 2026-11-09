@@ -48,6 +48,16 @@
     var W = { wPrice: 50, wLead: 25, wQuality: 25 };
     var rfxArgs = function (type, invited) { return Object.assign({ type: type, invited: invited }, W); };
 
+    // Delivery history from before this workspace, as if brought in from the old system: promised and received dates.
+    // Each list is how many days late (or early, below zero) each past delivery was.
+    var history = { tidewater: [2, 4, 3, 5, 1, 3], northfield: [2, 1, 3, 2], atlas: [0, 0, 1, 0, -1], meridian: [0, 1, 0, 0], summit: [0, -2, 1] };
+    Object.keys(history).forEach(function (sup) {
+      history[sup].forEach(function (slip, i) {
+        var promised = D(-260 + i * 30);
+        s.deliveries.push({ supplierId: sup, ref: "Earlier order " + (i + 1), promised: promised, received: P.addDays(promised, slip) });
+      });
+    });
+
     // Rate contracts. Each is drafted by the Buyer and approved by the Director, plus the Executive from $50,000.
     function contract(off, f, approvers) {
       var c = P.createContract(s, "buyer", T(off), f);

@@ -13,14 +13,19 @@ test("the list shows every project, worst first, with what holds it up", () => {
   role("requester"); tab("projects");
   check(listRows().length === 5, "five projects, got " + listRows().length);
   check(listRows()[0].dataset.id === "PRJ-9001", "the pump overhaul is worst, got " + listRows()[0].dataset.id);
-  check(row("PRJ-9001").textContent.indexOf("Pump seal overhaul kit") >= 0 && row("PRJ-9001").textContent.indexOf("$8,400") >= 0, row("PRJ-9001").textContent);
+  check(row("PRJ-9001").textContent.indexOf("Pump seal overhaul kit") >= 0 && row("PRJ-9001").textContent.indexOf("$21,000") >= 0, row("PRJ-9001").textContent);
   check(row("PRJ-9004").textContent.indexOf("5 d") >= 0, "a project with no cost per day shows days, not dollars");
 });
 
 test("a project shows each item's step, who holds it, and the gating item with its cost", () => {
   click(row("PRJ-9001"));
   check(text().indexOf("Holding the project up: Pump seal overhaul kit") >= 0, "gating note");
-  check(text().indexOf("At $4,200 a day of downtime, that costs $8,400") >= 0, "cost of delay");
+  check(text().indexOf("At $4,200 a day of downtime, that costs $21,000") >= 0, "cost of delay");
+  check(text().indexOf("Tidewater Seals usually delivers 3 days late (last 6 deliveries), so the plan uses") >= 0, "the promise is adjusted by the record");
+  check(text().indexOf("promised 23 Nov") >= 0 || text().indexOf("promised") >= 0, "the row shows the promise too");
+  check(text().indexOf("Knock on effect: Mobile crane hire with operator, per day is booked for") >= 0, "the crane booking stands idle");
+  check(text().indexOf("Idle 7 d") >= 0, "the crane row is marked idle");
+  check(!$$("#view button").some(b => b.textContent.indexOf("Draft a chase") === 0), "only the Buyer drafts a chase");
   check($$("#view tr.gate").length === 1, "the gating row is marked");
   check([...$$("#view tr")].some(r => r.textContent.indexOf("Maintenance technician labor") >= 0 && r.textContent.indexOf("Manager") >= 0), "the technician request waits on the Manager");
   check($$("#view .stg.cur").length >= 3, "rows show where they wait");
@@ -67,6 +72,22 @@ test("the Buyer follows projects but cannot create one, and can add a request to
   w.App.sel.reqFilter = "all"; w.App.sel.requests = "REQ-1007"; w.App.render();
   const pick = $("#prjPick-REQ-1007");
   check(pick, "the Buyer sees a project picker on a request");
+});
+
+test("the Buyer can open the chase draft for the gating PO from the project", () => {
+  role("buyer"); tab("projects");
+  click([...$$("#view table")[0].querySelectorAll("tr[data-id]")].find(r => r.dataset.id === "PRJ-9001"));
+  click($$("#view button").find(b => b.textContent.indexOf("Draft a chase to Tidewater") === 0));
+  check(w.App.tab === "expedite" && w.App.sel.chase && w.App.sel.chase.poId === "PO-4011", "opens Expedite on PO-4011");
+  check(text().indexOf("PO-4011") >= 0);
+});
+
+test("the Suppliers screen shows each supplier's delivery record", () => {
+  tab("suppliers");
+  const tide = [...$$("#view tr")].find(r => r.textContent.indexOf("Tidewater") === 0);
+  check(tide && tide.textContent.indexOf("Usually 3 d late") >= 0, tide && tide.textContent);
+  const crest = [...$$("#view tr")].find(r => r.textContent.indexOf("Crestline") === 0);
+  check(crest && crest.textContent.indexOf("Services, no deliveries") >= 0);
 });
 
 test("the project has its own record page with its history", () => {

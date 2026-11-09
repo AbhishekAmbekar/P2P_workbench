@@ -9,6 +9,16 @@
       "Renewal recorded. The supplier can be awarded and ordered from again.");
   };
 
+  // Promised against received, from receipts here and history brought in from before.
+  function recCell(sp) {
+    if (sp.categories.every(function (c) { return c === "Services"; })) return '<span class="muted">Services, no deliveries</span>';
+    var r = P.deliveryRecord(App.state, sp.id);
+    if (!r.n) return '<span class="muted">No deliveries yet</span>';
+    var txt = r.onTimePct + "% on time, last " + r.n;
+    return esc(txt) + (r.enough ? (r.typicalSlip ? '<div>' + App.pill("Usually " + r.typicalSlip + " d late", r.typicalSlip >= 3 ? "bad" : "warn") + "</div>" : '<div class="muted">Usually on time</div>')
+      : '<div class="muted">Too few to plan on</div>');
+  }
+
   function docPill(d) {
     var txt = d.label + ": " + (d.status === "Missing" ? "missing" : d.status === "Valid" ? "valid to " + d.expires : d.status === "Expiring" ? "expires " + d.expires : "expired " + d.expires);
     return App.pill(txt, d.status === "Valid" ? "ok" : d.status === "Expiring" ? "warn" : "bad");
@@ -43,11 +53,11 @@
       return { sp: sp, docs: docs, blocked: blocked };
     }).sort(function (x, y) { return (y.blocked - x.blocked) || (x.sp.name < y.sp.name ? -1 : 1); });
 
-    html += '<div class="wrap"><table><tr><th>Supplier</th><th>Sells</th><th>Status</th><th class="num">Rating</th><th class="num">Terms</th><th>Documents</th><th>Can be awarded</th></tr>' +
+    html += '<div class="wrap"><table><tr><th>Supplier</th><th>Sells</th><th>Status</th><th class="num">Rating</th><th class="num">Terms</th><th>Delivery record</th><th>Documents</th><th>Can be awarded</th></tr>' +
       rows.map(function (r) {
         var can = r.sp.status === "Not qualified" ? App.pill("No, not qualified", "bad") : r.blocked ? App.pill("No, document expired", "bad") : App.pill("Yes", "ok");
         return "<tr><td>" + esc(r.sp.name) + "</td><td>" + esc(r.sp.categories.join(", ")) + "</td><td>" + App.status(r.sp.status) + '</td><td class="num">' + r.sp.quality +
-          '</td><td class="num">Net ' + r.sp.terms + '</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">' + r.docs.map(docPill).join("") + "</div></td><td>" + can + "</td></tr>";
+          '</td><td class="num">Net ' + r.sp.terms + "</td><td>" + recCell(r.sp) + '</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">' + r.docs.map(docPill).join("") + "</div></td><td>" + can + "</td></tr>";
       }).join("") + "</table></div>";
     return html;
   };

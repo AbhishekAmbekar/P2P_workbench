@@ -50,7 +50,7 @@
     });
     return {
       seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000, PRJ: 9000 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], audit: [], docs: docs, contacts: {}
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], deliveries: [], audit: [], docs: docs, contacts: {}
     };
   }
 
@@ -652,6 +652,33 @@
 
   // Where one request of a project stands: the step it waits at, who holds it, since when, the date it should be ready,
   // and how that date compares with the project target.
+  // ---------- supplier delivery record ----------
+  // How a supplier's deliveries compared with what it promised. Counts receipts in this workspace and delivery history
+  // brought in from before it (state.deliveries: { supplierId, ref, promised, received }). Services have no delivery.
+  var REC_MIN = 3, REC_LAST = 8;
+  function deliveryRecord(s, supId) {
+    var list = (s.deliveries || []).filter(function (d) { return d.supplierId === supId; })
+      .map(function (d) { return { ref: d.ref, promised: d.promised, received: d.received }; });
+    s.pos.forEach(function (po) {
+      if (po.supplierId !== supId || po.cancelled || isService(po) || !po.confirmed) return;
+      var g = s.grns.filter(function (x) { return x.poId === po.id; })[0];
+      if (g) list.push({ ref: po.id, promised: po.promisedDate, received: g.date });
+    });
+    list.sort(function (a, b) { return a.received < b.received ? -1 : 1; });
+    list = list.slice(-REC_LAST);
+    var slips = list.map(function (d) { return daysBetween(d.promised, d.received); });
+    var sorted = slips.slice().sort(function (a, b) { return a - b; });
+    var median = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : 0;
+    return { n: list.length, deliveries: list, slips: slips, enough: list.length >= REC_MIN,
+      onTimePct: list.length ? Math.round(100 * slips.filter(function (x) { return x <= 0; }).length / list.length) : null,
+      typicalSlip: list.length >= REC_MIN ? Math.max(0, median) : 0 };
+  }
+  // The date to plan on for an open goods PO: the promise, moved by the supplier's usual slip when its record is long enough.
+  function plannedDate(s, po) {
+    var rec = deliveryRecord(s, po.supplierId);
+    return { promised: po.promisedDate, planned: rec.typicalSlip ? addDays(po.promisedDate, rec.typicalSlip) : po.promisedDate, record: rec };
+  }
+
   var STAGES = ["Request", "Approval", "Sourcing", "Order", "Delivery", "Ready"];
   function projectRow(s, p, r, today) {
     var it = item(r.itemId), x = r.rfxId ? getRfx(s, r.rfxId) : null, po = r.poId ? getPO(s, r.poId) : null;
@@ -682,6 +709,13 @@
         if (t.hold > 0) { row.stage = 4; row.holder = "Quality, receipt on hold"; row.blocked = true; }
         else if (!po.confirmed) { row.stage = 3; row.holder = "Supplier, to confirm"; }
         else { row.stage = 4; row.holder = "Supplier" + (t.accepted ? ", " + t.accepted + " of " + po.qty + " in" : ""); }
+        // Plan on the supplier's record, not only its promise.
+        var pd = plannedDate(s, po);
+        if (pd.planned !== pd.promised) {
+          row.expected = pd.planned; row.promised = pd.promised; row.slip = pd.record.typicalSlip; row.recN = pd.record.n;
+          row.note = "Promised " + pd.promised + ". " + supplier(po.supplierId).name + " usually delivers " + pd.record.typicalSlip + " day" +
+            (pd.record.typicalSlip === 1 ? "" : "s") + " late (last " + pd.record.n + " deliveries), so plan on " + pd.planned + ".";
+        }
       }
     }
     if (row.ready) { row.state = "Ready"; row.stage = 5; }
@@ -713,8 +747,17 @@
     var daysLate = readyBy ? Math.max(0, daysBetween(p.target, readyBy)) : 0;
     var counts = { Ready: 0, "On track": 0, "At risk": 0, Late: 0, Blocked: 0 };
     rows.forEach(function (r) { counts[r.state] += 1; });
+    // Services booked before the rest can be ready stand idle on the day unless they are moved.
+    var idle = [];
+    if (readyBy && daysLate > 0) rows.forEach(function (r) {
+      if (r.service && r.ready && r.po && r.po.promisedDate < readyBy) {
+        r.idleDays = daysBetween(r.po.promisedDate, readyBy);
+        r.note = "Booked for " + r.po.promisedDate + ", " + r.idleDays + " days before the rest can be ready. Move it, or it stands idle.";
+        idle.push(r);
+      }
+    });
     var state = !rows.length ? "Empty" : rows.reduce(function (w, r) { return STATE_RANK[r.state] < STATE_RANK[w] ? r.state : w; }, "Ready");
-    return { rows: rows, counts: counts, readyBy: readyBy, gating: gating && gating.state !== "On track" ? gating : null, daysLate: daysLate,
+    return { rows: rows, counts: counts, readyBy: readyBy, idle: idle, gating: gating && gating.state !== "On track" ? gating : null, daysLate: daysLate,
       delayCost: p.costPerDay !== null && p.costPerDay !== undefined ? daysLate * p.costPerDay : null, state: state,
       value: sum(rows, function (r) { return r.po ? r.po.qty * r.po.unitPrice : requestTotal(r.request); }) };
   }
@@ -1408,6 +1451,7 @@
     serviceChain: serviceChain, serviceReleases: releasesOf, nextReleaser: nextReleaser,
     createContract: createContract, decideContract: decideContract, contractChain: contractChain, contractStatus: contractStatus,
     contractFor: contractFor, refPriceAt: refPriceAt,
+    deliveryRecord: deliveryRecord, plannedDate: plannedDate,
     createProject: createProject, linkToProject: linkToProject, projectStatus: projectStatus, CRITICALITY: CRITICALITY, PROJECT_STAGES: STAGES, migrateContracts: migrateContracts, CT_WARN_DAYS: CT_WARN_DAYS,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
