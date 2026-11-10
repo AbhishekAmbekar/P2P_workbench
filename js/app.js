@@ -98,6 +98,7 @@
       if (!App.state.projects) App.state.projects = [];
       if (!App.state.deliveries) App.state.deliveries = [];
       if (!App.state.lessons) App.state.lessons = [];
+      if (!App.state.guideEdits) App.state.guideEdits = [];
       if (!App.state.seq.LES) App.state.seq.LES = 1100;   // no history from before; receipts in the app still count
       if (!App.state.seq.PRJ) App.state.seq.PRJ = 9000;
       // Suppliers added since the data was saved get documents valid for one year from today.

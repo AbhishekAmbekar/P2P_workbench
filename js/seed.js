@@ -269,6 +269,17 @@
     P.addLesson(s, "engineering", T(-150), { itemId: "MR-203", kind: "Failure in use", source: "Work order from March",
       what: "The rebuilt seal on pump P-204 leaked after 3 weeks.", why: "The kit came with O-rings rated to 80 C. The pump runs at 90 C, so they hardened.",
       next: "State the liquid temperature on the request and ask the supplier for O-rings rated to 120 C or more." });
+    // Engineering put that lesson into the seal kit guide, so the next buyer asks for it without reading the lesson.
+    P.editGuide(s, "engineering", T(-140), { itemId: "MR-203",
+      reason: "After the P-204 seal failure (LES-1101): the liquid temperature is now a spec, and the O-ring question asks for 120 C or more.",
+      what: "A mechanical seal stops the pumped liquid leaking out where the shaft leaves the pump. Two very flat faces press together: one turns with the shaft, one stays still. A thin film of the liquid between them seals and cools them. The kit holds the faces, springs and O-rings to rebuild the seal.",
+      where: "Pumps for water, coolant and process liquids. If the seal fails, the pump has to stop.",
+      specs: [["Shaft diameter", "The seal must match it exactly. Off by 1 mm and it will not fit."], ["Liquid pumped", "Decides the O-ring and face materials."],
+        ["Liquid temperature", "Put it on the request. O-rings rated too low harden and leak. P-204 runs at 90 C."], ["Pressure", "The seal and its spring must hold the pump's pressure."],
+        ["Face materials", "Silicon carbide against carbon is common. Harder faces last longer with grit in the liquid."],
+        ["Pump make and model", "From the nameplate. The surest way to an exact match."]],
+      ask: ["Is it an exact replacement for the seal now fitted, or an equivalent? If equivalent, send the drawing.",
+        "What O-ring material, and its rated temperature? We need 120 C or more.", "Lead time for the full kit, not only the faces.", "Can you hold a spare kit for us?"] }, {}); // {}: a written guide exists, so this is version 2
     P.addLesson(s, "quality", T(-1), { itemId: "PK-102", kind: "Receipt or quality check", source: "GRN-5003",
       what: "Three rolls were thinner than the spec at incoming inspection.", why: "Not known yet. The supplier is checking its line settings.",
       next: "Ask for the thickness test report with each lot, and check three rolls per lot until the supplier confirms the cause." });

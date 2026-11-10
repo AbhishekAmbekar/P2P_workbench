@@ -50,7 +50,7 @@
     });
     return {
       seq: { REQ: 1000, PR: 2000, RFX: 3000, PO: 4000, GRN: 5000, INV: 6000, SES: 7000, CT: 8000, PRJ: 9000, LES: 1100 },
-      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], deliveries: [], lessons: [], audit: [], docs: docs, contacts: {}
+      requests: [], rfx: [], pos: [], grns: [], invoices: [], ses: [], contracts: [], projects: [], deliveries: [], lessons: [], guideEdits: [], audit: [], docs: docs, contacts: {}
     };
   }
 
@@ -710,6 +710,55 @@
       if ((sameAs || []).indexOf(o.id) >= 0) return true;
       return words(o.name).filter(function (w) { return mine.indexOf(w) >= 0; }).length >= 2;
     });
+  }
+
+  // ---------- item guides: revised in the app ----------
+  // The written guide (what it is, where it is used, the specs that matter and why, what to ask the supplier) starts
+  // from item-guides.js. Engineering and Quality revise it, each change with a reason, and every version is kept.
+  // The drawing and look alike links stay with the written guide. The base guide is passed in, so this stays pure.
+  var GUIDE_ROLES = ["engineering", "quality"];
+  var gdeOf = function (s) { if (!s.guideEdits) s.guideEdits = []; return s.guideEdits; };
+  function guideRevisions(s, itemId) {
+    return gdeOf(s).filter(function (r) { return r.itemId === itemId; }).sort(function (a, b) { return b.rev - a.rev; });
+  }
+  function itemGuide(s, itemId, base) {
+    var r = guideRevisions(s, itemId)[0];
+    if (!r) return base ? Object.assign({}, base, { revision: null }) : null;
+    return Object.assign({}, base || {}, { what: r.what, where: r.where, specs: r.specs, ask: r.ask, revision: r });
+  }
+  function editGuide(s, role, now, f, base) {
+    need(role, GUIDE_ROLES);
+    var it = item(f.itemId || fail("Choose the item the guide is about."));
+    var what = (f.what || "").trim(), where = (f.where || "").trim(), reason = (f.reason || "").trim();
+    if (what.length < 20) fail("Say what the item is, in a sentence or two.");
+    if (where.length < 5) fail("Say where the item is used.");
+    var specs = [];
+    (f.specs || []).forEach(function (x) {
+      var a = String(x[0] || "").trim(), b = String(x[1] || "").trim();
+      if (!a && !b) return;
+      if (!a || !b) fail("Each spec needs its name and why it matters.");
+      specs.push([a, b]);
+    });
+    if (!specs.length) fail("List at least one spec that matters.");
+    if (specs.length > 12) fail("Keep it to the 12 specs that matter most.");
+    var ask = (Array.isArray(f.ask) ? f.ask : String(f.ask || "").split("\n")).map(function (q) { return String(q).trim(); }).filter(Boolean);
+    if (!ask.length) fail("List at least one question to ask the supplier.");
+    if (ask.length > 10) fail("Keep it to the 10 questions that matter most.");
+    var cur = itemGuide(s, it.id, base);
+    if (cur && cur.what === what && cur.where === where && JSON.stringify(cur.specs) === JSON.stringify(specs) && JSON.stringify(cur.ask) === JSON.stringify(ask)) {
+      fail("Nothing changed. Edit a section before saving.");
+    }
+    if (reason.length < 10) fail("Say what you changed and why, so the next reader can trust it.");
+    var revs = guideRevisions(s, it.id);
+    var r = { itemId: it.id, rev: (revs.length ? revs[0].rev : (base ? 1 : 0)) + 1, what: what, where: where, specs: specs, ask: ask, reason: reason, by: role, at: now };
+    gdeOf(s).push(r);
+    log(s, now, role, it.id, (cur ? "Guide revised on " : "Guide written for ") + it.id + " (version " + r.rev + ")", reason);
+    return r;
+  }
+  // Lessons logged after the guide last changed: the guide may need them.
+  function lessonsSinceGuide(s, itemId) {
+    var r = guideRevisions(s, itemId)[0];
+    return lesOf(s).filter(function (l) { return l.itemId === itemId && (!r || l.at > r.at); });
   }
 
   // ---------- supplier delivery record ----------
@@ -1513,6 +1562,7 @@
     contractFor: contractFor, refPriceAt: refPriceAt,
     deliveryRecord: deliveryRecord, plannedDate: plannedDate,
     addLesson: addLesson, itemKnowledge: itemKnowledge, similarItems: similarItems, LESSON_KINDS: LESSON_KINDS, LESSON_ROLES: LESSON_ROLES,
+    editGuide: editGuide, itemGuide: itemGuide, guideRevisions: guideRevisions, lessonsSinceGuide: lessonsSinceGuide, GUIDE_ROLES: GUIDE_ROLES,
     createProject: createProject, linkToProject: linkToProject, projectStatus: projectStatus, CRITICALITY: CRITICALITY, PROJECT_STAGES: STAGES, migrateContracts: migrateContracts, CT_WARN_DAYS: CT_WARN_DAYS,
     poStatus: poStatus, ctb: ctb, invoicedQty: invoicedQty,
     matchInvoice: matchInvoice, enterInvoice: enterInvoice, rerunMatch: rerunMatch,
