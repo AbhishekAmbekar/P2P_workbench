@@ -82,4 +82,51 @@ test("search finds an item card", () => {
   check(hits.indexOf("MR-203") >= 0, "hits: " + hits.join());
 });
 
+test("the guide shows its versions, and only Engineering and Quality can edit it", () => {
+  role("buyer");
+  w.App.openRecord("MR-203");
+  const v = card("Guide versions").textContent;
+  check(v.indexOf("Version 2") >= 0 && v.indexOf("Changed by Engineering") >= 0 && v.indexOf("LES-1101") >= 0, "the Engineering revision: " + v);
+  check(v.indexOf("Version 1") >= 0, "the written guide is kept");
+  check(card("What to ask the supplier").textContent.indexOf("We need 120 C or more") >= 0, "the revised question shows");
+  check(!$('[data-act="guideEdit"]'), "the Buyer cannot edit");
+  check(v.indexOf("Engineering and Quality keep the guide current") >= 0);
+});
+
+test("Engineering is told a lesson is newer than the guide, and revises it", () => {
+  role("engineering");
+  w.App.openRecord("CP-202");
+  check(card("Guide versions").textContent.indexOf("1 lesson was logged after the guide last changed") >= 0, "pending lesson note");
+  click($('[data-act="guideEdit"]'));
+  let f = $('form[data-form="guideSave"]');
+  check(f && f.elements.what.value.length > 20 && f.elements.specA0.value, "the form starts from the current guide");
+  f.elements.ask.value += "\nWhich drawing number and revision does your quote follow?";
+  submit(f);
+  check(toastText().indexOf("what you changed and why") >= 0, "a reason is required: " + toastText());
+  f = $('form[data-form="guideSave"]');
+  check(f && f.elements.ask.value.indexOf("drawing number") >= 0, "the form stays open with the edits");
+  f.elements.reason.value = "Ask for the drawing revision, after the revision B offer on RFX-3003.";
+  submit(f);
+  check(toastText().indexOf("saved as version 2") >= 0, "toast: " + toastText());
+  check(!$('form[data-form="guideSave"]'), "the form closes");
+  check(card("What to ask the supplier").textContent.indexOf("Which drawing number and revision") >= 0, "the new question shows");
+  check(card("Guide versions").textContent.indexOf("lesson was logged after") < 0, "the note clears");
+  check(card("What it is").querySelector("small").textContent.indexOf("Version 2") >= 0, "the card says which version");
+});
+
+test("Quality writes the first guide for an item that has none", () => {
+  role("quality");
+  w.App.openRecord("MR-405");
+  click($$('[data-act="guideEdit"]').find(b => b.textContent === "Write the guide"));
+  const f = $('form[data-form="guideSave"]');
+  f.elements.what.value = "A kit of bolts, nuts and washers from M6 to M12, sorted by size in one box.";
+  f.elements.where.value = "Workshop and line maintenance.";
+  f.elements.specA0.value = "Grade and finish"; f.elements.specB0.value = "Sets the strength and how well it resists rust.";
+  f.elements.ask.value = "What grade are the bolts, and are they zinc plated?";
+  f.elements.reason.value = "First guide, written from the incoming checks.";
+  submit(f);
+  check(toastText().indexOf("version 1") >= 0, "toast: " + toastText());
+  check(card("Specs that matter, and why").textContent.indexOf("Grade and finish") >= 0);
+});
+
 t.done();

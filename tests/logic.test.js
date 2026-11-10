@@ -810,6 +810,46 @@ test("the item card picks up failed technical reviews and receipt problems on it
   assert.strictEqual(s.lessons.length, 4);
 });
 
+test("Engineering and Quality revise an item guide with a reason, and every version is kept", () => {
+  const s = P.newState();
+  const base = { what: "A kit to rebuild a pump seal.", where: "Pumps.", drawing: "<svg></svg>", specs: [["Shaft diameter", "Must match."]], ask: ["Exact replacement?"] };
+  const f = { itemId: "MR-203", what: "A kit to rebuild a mechanical seal on a pump.", where: "Pumps for water and coolant.",
+    specs: [["Shaft diameter", "Must match."], ["", ""], ["Liquid temperature", "O-rings rated too low harden."]], ask: "Exact replacement?\n\nO-ring rating?", reason: "Added the liquid temperature after a failure." };
+  throwsWith(() => P.editGuide(s, "buyer", NOW, f, base), "cannot do this");
+  throwsWith(() => P.editGuide(s, "requester", NOW, f, base), "cannot do this");
+  throwsWith(() => P.editGuide(s, "engineering", NOW, Object.assign({}, f, { what: "Seal" }), base), "what the item is");
+  throwsWith(() => P.editGuide(s, "engineering", NOW, Object.assign({}, f, { specs: [["Shaft diameter", ""]] }), base), "name and why it matters");
+  throwsWith(() => P.editGuide(s, "engineering", NOW, Object.assign({}, f, { specs: [] }), base), "at least one spec");
+  throwsWith(() => P.editGuide(s, "engineering", NOW, Object.assign({}, f, { ask: "  \n " }), base), "at least one question");
+  throwsWith(() => P.editGuide(s, "engineering", NOW, Object.assign({}, f, { reason: "" }), base), "what you changed and why");
+  throwsWith(() => P.editGuide(s, "engineering", NOW, Object.assign({}, base, { itemId: "MR-203", reason: "No real change here." }), base), "Nothing changed");
+  const r = P.editGuide(s, "engineering", NOW, f, base);
+  assert.strictEqual(r.rev, 2, "the written guide is version 1");
+  assert.deepStrictEqual(r.specs.map(x => x[0]), ["Shaft diameter", "Liquid temperature"], "blank spec rows are dropped");
+  assert.deepStrictEqual(r.ask, ["Exact replacement?", "O-ring rating?"]);
+  const g = P.itemGuide(s, "MR-203", base);
+  assert.strictEqual(g.what, f.what);
+  assert.strictEqual(g.drawing, "<svg></svg>", "the drawing stays with the written guide");
+  assert.strictEqual(P.editGuide(s, "quality", NOW, Object.assign({}, f, { where: "Pumps for water, coolant and oil." }), base).rev, 3);
+  assert.deepStrictEqual(P.guideRevisions(s, "MR-203").map(x => x.rev), [3, 2], "newest first");
+  assert.strictEqual(P.itemGuide(s, "MR-203", base).where, "Pumps for water, coolant and oil.");
+  assert.ok(s.audit.some(a => a.entity === "MR-203" && a.action.indexOf("Guide revised on MR-203 (version 2)") === 0));
+  const first = P.editGuide(s, "quality", NOW, f, null);
+  assert.ok(first.rev === 4 && P.itemGuide(s, "MR-405", null) === null, "an item without a guide has none until one is written");
+  const glove = P.editGuide(s, "quality", NOW, Object.assign({}, f, { itemId: "MR-403" }), null);
+  assert.strictEqual(glove.rev, 1, "a first guide written in the app is version 1");
+  assert.ok(s.audit.some(a => a.action.indexOf("Guide written for MR-403") === 0));
+});
+
+test("lessons logged after the guide last changed are flagged for the guide", () => {
+  const s = seed(NOW);
+  assert.strictEqual(P.guideRevisions(s, "MR-203")[0].by, "engineering", "Engineering put the March lesson into the seal guide");
+  assert.strictEqual(P.lessonsSinceGuide(s, "MR-203").length, 0, "so nothing waits on it");
+  assert.strictEqual(P.lessonsSinceGuide(s, "CP-202").length, 1, "the board lesson is newer than its guide");
+  P.addLesson(s, "quality", "2026-10-27T10:00:00.000Z", { itemId: "MR-203", kind: "Other", what: "A spring arrived bent in one kit.", why: "Not known yet", next: "Check the springs at receipt." });
+  assert.strictEqual(P.lessonsSinceGuide(s, "MR-203").length, 1);
+});
+
 test("seed builds without breaking any rule and covers every stage", () => {
   const s = seed(NOW);
   const m = P.metrics(s, NOW);
