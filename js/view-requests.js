@@ -60,7 +60,7 @@
       (App.state.projects || []).filter(function (p) { return p.status === "Open"; }).map(function (p) {
         return '<option value="' + p.id + '">' + esc(p.id + "  " + p.name + ", target " + p.target) + "</option>";
       }).join("") + "</select></label>" +
-      '<div class="wide"><div id="reqPreview" class="note"></div>' +
+      '<div class="wide"><div id="reqPreview" class="note"></div><div id="reqLessons"></div>' +
       '<div class="actions"><button type="submit">Submit for approval</button>' +
       '<button type="button" class="ghost" data-act="reqToggle">Cancel</button></div></div></form></div>';
   }
@@ -86,12 +86,18 @@
     App.sel.newReq = !App.sel.newReq;
     App.render();
     var f = document.querySelector('form[data-form="reqSubmit"]');
-    if (f) document.getElementById("reqPreview").textContent = previewText(f);
+    if (f) { document.getElementById("reqPreview").textContent = previewText(f); showLessons(f); }
   };
   App.actions.reqChange = function (target, form) {
     if (target.name === "itemId") form.elements.estUnit.value = App.item(target.value).stdPrice;
     document.getElementById("reqPreview").textContent = previewText(form);
+    showLessons(form);
   };
+  // Past problems with the chosen item, shown before the spec is written, with a link to its card.
+  function showLessons(form) {
+    var box = document.getElementById("reqLessons");
+    if (box) box.innerHTML = form.elements.itemId ? App.itemLessonsNote(form.elements.itemId.value) : "";
+  }
   App.actions.reqSubmit = function (data) {
     var who = App.roleInfo("requester").persona.split(",")[0];
     var r = App.run(function (s, role, now) {
@@ -123,7 +129,7 @@
       ["Need by", r.needBy], ["Site", r.site], ["Cost center", r.costCenter], ["Reason", r.reason],
       ["Project", r.projectId ? r.projectId + "  " + ((App.state.projects || []).find(function (p) { return p.id === r.projectId; }) || {}).name : "None"]
     ];
-    var html = '<div class="card"><h3>' + r.id + (r.prNo ? " / " + r.prNo : "") + " " + App.status(r.status) + App.recBtn(r.id) + "</h3>" +
+    var html = '<div class="card"><h3>' + r.id + (r.prNo ? " / " + r.prNo : "") + " " + App.status(r.status) + App.recBtn(r.id) + App.itemBtn(r.itemId) + "</h3>" +
       '<div class="form" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' + rows.map(function (x) {
         return "<div><div class=\"hint\">" + esc(x[0]) + "</div><div>" + esc(x[1]) + "</div></div>";
       }).join("") + "</div><h3 style=\"margin-top:14px\">Approval chain</h3>" + chainHtml(r) +

@@ -199,9 +199,9 @@
 
   function detail(x) {
     var r = reqOf(x), it = App.item(r.itemId), buyer = App.role === "buyer";
-    var h = '<div class="card"><h3>' + x.id + " (" + x.type + ") " + App.status(x.status) + App.recBtn(x.id) + "</h3>" +
+    var h = '<div class="card"><h3>' + x.id + " (" + x.type + ") " + App.status(x.status) + App.recBtn(x.id) + App.itemBtn(it.id) + "</h3>" +
       '<p class="hint">For ' + esc(r.prNo) + ": " + r.qty + " x " + esc(it.name) + ", approved value " + App.money(P.requestTotal(r)) + ", need by " + r.needBy +
-      (x.closeDate ? ". Bids close " + x.closeDate : "") + ".</p>" +
+      (x.closeDate ? ". Bids close " + x.closeDate : "") + ".</p>" + App.itemLessonsNote(it.id) +
       '<div class="chain">' + x.invited.map(function (id) {
         var got = x.quotes.some(function (q) { return q.supplierId === id; });
         return App.pill(App.supplier(id).name + ": " + (got ? "quoted" : "no quote yet"), got ? "ok" : "mut");

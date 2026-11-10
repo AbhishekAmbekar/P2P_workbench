@@ -783,6 +783,33 @@ test("the seed has five projects, and the pump overhaul is held up by its seal k
   assert.ok(P.queueFor(s, "requester", NOW).some(q => q.label === "Your projects that are late or at risk"));
 });
 
+// ---------- item knowledge ----------
+test("Engineering, Quality and the Requester log lessons, and each needs what happened, why and what to do next", () => {
+  const s = P.newState();
+  const f = { itemId: "MR-203", kind: "Failure in use", what: "The seal leaked after 3 weeks.", why: "O-rings rated too low.", next: "State the liquid temperature on the request." };
+  throwsWith(() => P.addLesson(s, "buyer", NOW, f), "cannot do this");
+  throwsWith(() => P.addLesson(s, "engineering", NOW, Object.assign({}, f, { kind: "Gossip" })), "what kind of lesson");
+  throwsWith(() => P.addLesson(s, "engineering", NOW, Object.assign({}, f, { what: "Bad" })), "what happened");
+  throwsWith(() => P.addLesson(s, "engineering", NOW, Object.assign({}, f, { why: "" })), "Not known yet");
+  throwsWith(() => P.addLesson(s, "engineering", NOW, Object.assign({}, f, { next: "" })), "what to do next time");
+  ["engineering", "quality", "requester"].forEach(role => P.addLesson(s, role, NOW, f));
+  assert.deepStrictEqual(P.itemKnowledge(s, "MR-203").lessons.map(l => l.id).sort(), ["LES-1101", "LES-1102", "LES-1103"]);
+  assert.ok(s.audit.some(a => a.entity === "MR-203" && a.action.indexOf("Lesson logged") === 0));
+});
+
+test("the item card picks up failed technical reviews and receipt problems on its own, and finds look alike items", () => {
+  const s = seed(NOW);
+  const board = P.itemKnowledge(s, "CP-202");
+  assert.strictEqual(board.reviews.length, 1, "the failed offer on RFX-3003");
+  assert.ok(board.reviews[0].note.indexOf("revision") >= 0);
+  const film = P.itemKnowledge(s, "PK-102");
+  assert.deepStrictEqual(film.receipts.map(r => r.result), ["Hold"]);
+  assert.strictEqual(film.lessons.length, 1, "Quality logged one");
+  assert.deepStrictEqual(P.similarItems("MR-203").map(i => i.id), ["MR-209"]);
+  assert.deepStrictEqual(P.similarItems("MR-403").map(i => i.id), [], "gloves look like nothing else");
+  assert.strictEqual(s.lessons.length, 4);
+});
+
 test("seed builds without breaking any rule and covers every stage", () => {
   const s = seed(NOW);
   const m = P.metrics(s, NOW);
