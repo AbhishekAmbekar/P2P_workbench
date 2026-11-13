@@ -97,6 +97,82 @@
     var id = form.dataset.id;
     App.run(function (s, role, now) { return P.setAdjustments(s, role, now, id, data); }, "Adjustment values saved. The ranking below uses them.");
   };
+  // ---------- round 2: best and final, rank only ----------
+  App.actions.r2Open = function (data, form) {
+    var id = form.dataset.id;
+    App.run(function (s, role, now) { return P.openRound2(s, role, now, id, { closeDate: data.closeDate }); },
+      "Round 2 is open. Draft each supplier's email below. Each one shows only that supplier's rank.");
+  };
+  App.actions.r2Offer = function (data, form) {
+    var id = form.dataset.id, sup = form.dataset.sup;
+    App.run(function (s, role, now) { return P.addRound2Offer(s, role, now, id, { supplierId: sup, unitPrice: data.unitPrice, leadDays: data.leadDays, terms: data.terms }); },
+      App.supplier(sup).name + "'s round 2 offer saved.");
+  };
+  App.actions.r2Close = function (el) {
+    var id = el.dataset.id;
+    App.run(function (s, role, now) { App.sel.r2draft = null; return P.closeRound2(s, role, now, id); }, "Round 2 closed. The ranking below uses the final offers.");
+  };
+  App.actions.r2Draft = function (el) { App.sel.r2draft = el.dataset.sup; App.render(); };
+  App.actions.r2Mail = function (el) {
+    var f = document.querySelector("form[data-r2mail]"), x = App.state.rfx.find(function (z) { return z.id === f.dataset.id; }), sup = f.dataset.sup;
+    var d = { to: f.elements.to.value.trim(), subject: f.elements.subject.value, body: f.elements.body.value }, via = el.dataset.via;
+    if (d.to && !P.emailOk(d.to)) { App.toast("That does not look like an email address. Fix it or leave it blank.", true); return; }
+    var l = P.mailLinks(d), label = via === "gmail" ? "Gmail" : via === "outlook" ? "Outlook on the web" : via === "copy" ? "copy" : "your mail app";
+    if (via === "gmail") window.open(l.gmail, "_blank", "noopener");
+    else if (via === "outlook") window.open(l.outlook, "_blank", "noopener");
+    else if (via === "copy") {
+      var text = "To: " + d.to + "\nSubject: " + d.subject + "\n\n" + d.body;
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+    } else window.location.href = l.mailto;
+    App.run(function (s, role, now) { return P.logRound2Draft(s, role, now, x.id, sup, label); },
+      via === "copy" ? "Copied. Paste it into your mail program." : "Draft opened in " + label + ". Check it there and press send.");
+  };
+
+  function round2Panel(x) {
+    var r2 = x.round2, r = reqOf(x), it = App.item(r.itemId), buyer = App.role === "buyer";
+    var rows = r2.invited.map(function (id) {
+      var q = x.quotes.find(function (z) { return z.supplierId === id; }), one = r2.first[id], got = r2.offers[id];
+      var form = buyer ? '<form data-form="r2Offer" data-id="' + x.id + '" data-sup="' + id + '" class="techrow">' +
+        '<input type="number" name="unitPrice" min="0.01" step="0.01" aria-label="Round 2 unit price for ' + esc(App.supplier(id).name) + '" placeholder="Price" value="' + (got ? q.unitPrice : "") + '">' +
+        '<input type="number" name="leadDays" min="1" step="1" aria-label="Round 2 lead time" placeholder="Lead days" value="' + q.leadDays + '">' +
+        '<input name="terms" aria-label="Round 2 terms" placeholder="Terms" value="' + esc(q.terms || "") + '">' +
+        '<button type="submit" class="small">Save</button></form>' : "";
+      return "<tr><td>" + esc(App.supplier(id).name) + '</td><td>' + P.ordinal(r2.ranks[id]) + " of " + r2.of + '</td><td class="num">' + App.money(one.unitPrice) +
+        '<div class="hint">' + one.leadDays + " days, " + esc(one.terms || "net " + one.termsDays) + "</div></td><td>" +
+        (got ? App.pill("Received", "ok") + ' <span class="hint">' + App.money(q.unitPrice) + "</span>" : App.pill("Waiting", "warn")) + "</td><td>" + form + "</td><td>" +
+        (buyer ? '<button type="button" class="small ghost" data-act="r2Draft" data-sup="' + id + '">Email draft</button>' : "") + "</td></tr>";
+    }).join("");
+    var h = '<div class="note"><b>Best and final round, closes ' + esc(r2.closeDate) + ".</b> Round 1 offers stay binding: a supplier can lower its price, shorten its lead time " +
+      "or lengthen its terms, never the reverse. Each supplier is told only its own rank. The adjustment values stay as they were locked.</div>" +
+      '<div class="wrap"><table><tr><th>Supplier</th><th>Rank told</th><th class="num">Round 1</th><th>Round 2</th><th>' + (buyer ? "Enter the reply (blank keeps round 1)" : "") + "</th><th></th></tr>" + rows + "</table></div>";
+    if (buyer && App.sel.r2draft && r2.invited.indexOf(App.sel.r2draft) >= 0) {
+      var d = P.round2Draft(App.state, x, App.sel.r2draft, App.roleInfo("buyer").persona.split(",")[0]);
+      h += '<div class="card" style="margin-top:12px"><h3>Email draft to ' + esc(App.supplier(App.sel.r2draft).name) + "</h3>" +
+        '<p class="hint">Only this supplier\'s rank and its own offer are in it. Nothing is sent from here, and the audit trail records a draft, not a sent mail.</p>' +
+        '<form data-r2mail="1" data-id="' + x.id + '" data-sup="' + App.sel.r2draft + '" class="form" onsubmit="return false">' +
+        '<label>To<input name="to" value="' + esc(d.to) + '" placeholder="supplier@example.com" autocomplete="off"></label>' +
+        '<label class="wide">Subject<input name="subject" value="' + esc(d.subject) + '"></label>' +
+        '<label class="wide">Message<textarea name="body" style="min-height:260px">' + esc(d.body) + "</textarea></label>" +
+        '<div class="wide actions"><button type="button" data-act="r2Mail" data-via="mail">Open in my mail app</button>' +
+        '<button type="button" class="ghost" data-act="r2Mail" data-via="gmail">Gmail</button><button type="button" class="ghost" data-act="r2Mail" data-via="outlook">Outlook</button>' +
+        '<button type="button" class="ghost" data-act="r2Mail" data-via="copy">Copy text</button></div></form></div>';
+    }
+    if (buyer) h += '<div class="actions"><button data-act="r2Close" data-id="' + x.id + '">Close round 2 and compare</button>' +
+      '<span class="hint">Suppliers that did not reply keep their round 1 offer.</span></div>';
+    else h += '<div class="note">The Buyer enters the replies as they arrive. Switch roles to continue.</div>';
+    return h;
+  }
+
+  // The suggested next step after the technical review, and the button to open round 2.
+  function strategyNote(x) {
+    var h = P.rfxStrategy(App.state, x, App.now());
+    if (!h) return "";
+    var form = h.kind === "round2" && App.role === "buyer" ? '<form data-form="r2Open" data-id="' + x.id + '" class="techrow" style="margin-top:8px">' +
+      '<label class="hint">Round 2 closes on <input type="date" name="closeDate" value="' + P.addDays(App.today(), 3) + '"></label>' +
+      '<button type="submit">Open round 2</button><span class="hint">or recommend now from the ranking below.</span></form>' : "";
+    return '<div class="note strategy"><b>Suggested next step.</b> ' + esc(h.text) + ' <span class="hint">A rule of thumb from the number of offers and the gap, not a calculated optimum.</span>' + form + "</div>";
+  }
+
   App.actions.rfxRevalidate = function (data, form) {
     var id = form.dataset.id;
     App.run(function (s, role, now) { return P.extendQuote(s, role, now, id, data.supplierId, data.newDate, data.note); },
@@ -229,6 +305,14 @@
     }).join(" ") + "</div>";
   }
 
+  // What round 2 saved, on landed cost, across the offers that improved.
+  function savingText(x) {
+    var r2 = x.round2, r = reqOf(x);
+    var parts = r2.invited.map(function (id) { var v = P.round2Saving(App.state, x, id); return v && v.unit > 0 ? esc(App.supplier(id).name) + " " + App.money(v.total) + " (" + v.pct + "%)" : null; })
+      .filter(Boolean);
+    return parts.length ? "Saved against round 1, on landed cost for " + r.qty + ": " + parts.join(", ") + "." : "No supplier improved its offer, so round 1 stands.";
+  }
+
   // How the recommended offer compares with the next eligible one on the adjusted price, for the approver.
   function gapText(x, supId) {
     var ranked = P.scoreRFx(x, App.state, App.now()).filter(function (q) { return q.eligible; }), r = reqOf(x);
@@ -239,11 +323,17 @@
       (d >= 0 ? App.money(d) + " higher" : App.money(-d) + " lower") + " for the order on the same basis. ";
   }
 
+  function r2Text(x, supId) {
+    var v = P.round2Saving(App.state, x, supId);
+    if (!v) return "No round 2 was run. ";
+    return v.unit > 0 ? "Round 2 lowered this offer by " + App.money(v.total) + " (" + v.pct + "%) against its round 1 price. " : "This supplier kept its round 1 offer in round 2. ";
+  }
+
   // The Buyer's recommendation, the approval chain, and the decision buttons for the approver whose turn it is.
   function approvalPanel(x) {
     var rec = x.recommendation, sp = App.supplier(rec.supplierId), step = x.awardApprovals.find(function (a) { return a.status === "Pending"; });
     var h = '<div class="note"><b>Recommended: ' + esc(sp.name) + "</b> for " + App.money(rec.value) + " landed. " +
-      (rec.justification ? "Reason: " + esc(rec.justification) + ". " : "Lowest adjusted price among acceptable offers. ") + gapText(x, rec.supplierId) +
+      (rec.justification ? "Reason: " + esc(rec.justification) + ". " : "Lowest adjusted price among acceptable offers. ") + gapText(x, rec.supplierId) + r2Text(x, rec.supplierId) +
       (rec.reasons.length ? "Escalated to the Executive for: " + esc(rec.reasons.join(", ")) + "." : "") + "</div>" + chainPills(x.awardApprovals, true);
     if (App.role === step.role) {
       h += '<label class="hint" style="display:block;margin-top:10px">Comment (needed to reject)</label><textarea id="awardDecisionNote"></textarea>' +
@@ -279,12 +369,15 @@
         var no = last.approvals.find(function (a) { return a.status === "Rejected"; });
         h += '<div class="note warn">The award to ' + esc(App.supplier(last.rec.supplierId).name) + " was rejected by the " + esc(P.roleLabel(no.role)) + ": " + esc(no.comment) + "</div>";
       }
-      h += compareTable(x, buyer) + revalidateForm(x);
+      if (x.round2 && x.round2.closedAt) h += '<div class="note">Round 2 closed on ' + esc(P.dateOf(x.round2.closedAt)) + ". " + savingText(x) + "</div>";
+      h += strategyNote(x) + compareTable(x, buyer) + revalidateForm(x);
       if (buyer) {
         h += '<label class="hint" style="display:block;margin-top:10px">Justification (required for a conditional supplier, a single bid, or when not picking the lowest adjusted price. Any of these also sends the award to the Executive.)</label>' +
           '<textarea id="awardNote"></textarea>' +
           '<p class="hint">Recommend sends the award for approval: the Director, plus the Executive from ' + App.money(REF.thresholds.executive).replace(/\.00$/, "") + ".</p>";
       } else h += '<div class="note">The Buyer recommends the award. Then the Director, and for large or risky awards the Executive, approve it.</div>';
+    } else if (x.status === "Round 2") {
+      h += round2Panel(x) + compareTable(x, false);
     } else if (x.status === "Award pending approval") {
       h += compareTable(x, false) + approvalPanel(x);
     } else {

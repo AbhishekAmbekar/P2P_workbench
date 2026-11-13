@@ -879,6 +879,66 @@ test("lessons logged after the guide last changed are flagged for the guide", ()
   assert.strictEqual(P.lessonsSinceGuide(s, "MR-203").length, 1);
 });
 
+// An RFx with three acceptable quotes, closed and reviewed, ready for the Buyer.
+function evaluatedRfx() {
+  const { s, r } = rfxFixture();
+  const x = P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield", "helio", "brightpath"] });
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 212, leadDays: 10, terms: "Net 45" });
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 214, leadDays: 10, terms: "Net 45" });
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "brightpath", unitPrice: 219, leadDays: 10, terms: "Net 45" });
+  P.closeBidding(s, "buyer", NOW, x.id);
+  techOK(s, x);
+  return { s, r, x };
+}
+
+test("the strategy hint follows the number of eligible offers and the gap between them", () => {
+  const { s, x } = evaluatedRfx();
+  const h = P.rfxStrategy(s, x, NOW);
+  assert.strictEqual(h.kind, "round2");
+  assert.strictEqual(h.n, 3);
+  assert.strictEqual(h.gap, 0.9, "212 against 214");
+  assert.ok(h.text.indexOf("each supplier has a real chance") >= 0, "close offers");
+  const one = P.newState(), r1 = baseReq(one, { itemId: "CP-104", qty: 60, estUnit: 215 });
+  approveAll(one, r1);
+  const x1 = P.startRFx(one, "buyer", NOW, r1.id, { type: "RFQ", invited: ["northfield", "helio"] });
+  P.addQuote(one, "buyer", NOW, x1.id, { supplierId: "northfield", unitPrice: 212, leadDays: 10 });
+  P.closeBidding(one, "buyer", NOW, x1.id);
+  techOK(one, x1);
+  assert.strictEqual(P.rfxStrategy(one, x1, NOW).kind, "negotiate");
+  throwsWith(() => P.openRound2(one, "buyer", NOW, x1.id, {}), "at least 2 eligible offers");
+});
+
+test("round 2 is binding and rank only: offers can only improve, one round, and the award waits for it", () => {
+  const { s, r, x } = evaluatedRfx();
+  throwsWith(() => P.openRound2(s, "requester", NOW, x.id, {}), "cannot do this");
+  throwsWith(() => P.openRound2(s, "buyer", NOW, x.id, { closeDate: day(-1) }), "cannot close in the past");
+  P.openRound2(s, "buyer", NOW, x.id, {});
+  assert.strictEqual(x.status, "Round 2");
+  assert.strictEqual(x.round2.closeDate, day(3), "three days by default");
+  assert.deepStrictEqual(x.round2.ranks, { northfield: 1, helio: 2, brightpath: 3 });
+  const d = P.round2Draft(s, x, "helio", "Buyer");
+  assert.ok(d.body.indexOf("ranks 2nd of 3") >= 0 && d.body.indexOf("$214.00 per unit") >= 0 && d.body.indexOf("only further round") >= 0);
+  assert.ok(d.body.indexOf("Northfield") < 0 && d.body.indexOf("212") < 0, "no other supplier's name or price");
+  throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "northfield", ""), "Round 2 is still open");
+  throwsWith(() => P.addRound2Offer(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 215 }), "higher than its binding round 1 price of $214.00");
+  throwsWith(() => P.addRound2Offer(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, leadDays: 12 }), "cannot be longer than round 1 (10 days)");
+  throwsWith(() => P.addRound2Offer(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, terms: "Net 30" }), "cannot be shorter than round 1 (net 45)");
+  throwsWith(() => P.addRound2Offer(s, "buyer", NOW, x.id, { supplierId: "kestrel", unitPrice: 1 }), "not in round 2");
+  P.addRound2Offer(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, terms: "Net 60" });
+  P.closeRound2(s, "buyer", at(3), x.id);
+  assert.strictEqual(x.status, "Evaluating");
+  assert.ok(s.audit.some(a => a.action === "Round 2 closed" && a.note.indexOf("1 of 3 improved") === 0 && a.note.indexOf("Round 1 stands for Northfield Metals, Brightpath Electronics") >= 0));
+  const ranked = P.scoreRFx(x, s, NOW);
+  assert.strictEqual(ranked[0].supplierId, "helio", "Helio's better offer now leads");
+  assert.deepStrictEqual(P.round2Saving(s, x, "helio"), { unit: 9, total: 540, pct: 4.2, from: 214, to: 205 });
+  assert.strictEqual(P.round2Saving(s, x, "northfield").total, 0, "no reply, round 1 stands");
+  throwsWith(() => P.openRound2(s, "buyer", NOW, x.id, {}), "one round only");
+  assert.strictEqual(P.rfxStrategy(s, x, NOW), null, "no further hint after the round");
+  award(s, NOW, x, "helio", "");
+  const po = P.createPO(s, "buyer", NOW, r.id, {});
+  assert.strictEqual(po.unitPrice, 205, "the PO is at the round 2 price");
+});
+
 test("seed builds without breaking any rule and covers every stage", () => {
   const s = seed(NOW);
   const m = P.metrics(s, NOW);

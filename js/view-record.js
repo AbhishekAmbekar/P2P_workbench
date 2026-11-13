@@ -147,7 +147,7 @@
     var noQuote = x.invited.filter(function (s) { return !x.quotes.some(function (q) { return q.supplierId === s; }); });
     return band({ home: "rfx", id: id, title: x.id, flow: f, pills: App.status(x.status) + " " + App.pill(x.type, "mut"),
       sub: esc("For " + (r.prNo || r.id) + " · " + r.qty + " " + r.uom + " " + it.name),
-      facts: [["Invited", String(x.invited.length)], ["Quotes in", String(x.quotes.length)], ["Ranked on", "Adjusted price"],
+      facts: [["Invited", String(x.invited.length)], ["Quotes in", String(x.quotes.length)], ["Ranked on", "Adjusted price"], ["Round 2", x.round2 ? (x.round2.closedAt ? "Closed " + day(x.round2.closedAt) : "Open until " + esc(x.round2.closeDate)) : "Not run"],
         ["Lowest adjusted", ranked.length ? money(ranked[0].adjusted) : "None yet"], ["Awarded to", aw ? esc(aw) : "Not yet"], ["Opened", day(x.createdAt)]]
     }) + '<div class="page"><div class="secs">' +
       section("Ranking", table(["#", "Supplier", "Status", "Technical", "#Landed", "#Bonus and malus", "#Adjusted", "#Lead days", "Valid until", "Can win"], ranked.map(function (q, i) {
@@ -164,6 +164,7 @@
         ["Recommended", x.recommendation ? esc(App.supplier(x.recommendation.supplierId).name) + " for " + money(x.recommendation.value) : ""],
         ["Award", aw ? esc(aw) + " on " + day(x.award.at) : "Not awarded"], ["Justification", x.award ? esc(x.award.justification || "Lowest adjusted price among eligible offers") : ""],
         ["Approvals", approvalText(x.award ? x.award.approvals : x.awardApprovals)],
+        ["Round 2 saving", x.round2 ? x.round2.invited.map(function (sid) { var v = P.round2Saving(App.state, x, sid); return esc(App.supplier(sid).name) + " " + money(v.total); }).join(", ") : '<span class="muted">No round 2</span>'],
         ["Earlier rejections", (x.pastRecommendations || []).map(function (p) {
           var no = p.approvals.find(function (a) { return a.status === "Rejected"; });
           return esc(App.supplier(p.rec.supplierId).name + ", rejected by the " + P.roleLabel(no.role) + ": " + no.comment);
