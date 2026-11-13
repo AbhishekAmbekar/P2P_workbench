@@ -324,6 +324,112 @@
   }
   var round2c = function (n) { return Math.round(n * 100) / 100; };
 
+  // ---------- 2b. best and final round (round 2) ----------
+  // After the technical review the Buyer can run one more round for the eligible offers. Each supplier is told only its
+  // own rank. Round 1 offers stay binding: a round 2 offer can lower the price, shorten the lead time or lengthen the
+  // terms, never the reverse. One round only, so suppliers have no reason to hold back for a third.
+  var ordinal = function (n) { return n + (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"); };
+
+  // A rule of thumb for the next step, from the number of eligible offers and the gap between them.
+  function rfxStrategy(s, x, now) {
+    if (x.status !== "Evaluating" || x.round2) return null;
+    var el = scoreRFx(x, s, now).filter(function (q) { return q.eligible && !q.expired; });
+    if (!el.length) return { kind: "none", text: "No eligible offer. Invite more suppliers, or ask the suppliers whose offers failed to quote again to the spec." };
+    if (el.length === 1) {
+      var it = item(getReq(s, x.requestId).itemId);
+      return { kind: "negotiate", text: "One eligible offer, so another round would add no competition. Negotiate with the supplier directly. Compare its price with the standard price of " +
+        fmt(it.stdPrice) + " and with past orders on the item card." };
+    }
+    var gap = round1((el[1].adjusted - el[0].adjusted) / el[0].adjusted * 100);
+    return { kind: "round2", n: el.length, gap: gap, text: el.length + " eligible offers, " + gap + "% apart on the adjusted price. Suggested: one best and final round. " +
+      "Each supplier learns only its own rank, and round 1 offers stay binding." +
+      (gap > 15 ? " The gap is wide, so the leader has little reason to move. The round mainly tests whether the others can close it." :
+        gap < 3 ? " The offers are close, so each supplier has a real chance to win by improving." : "") };
+  }
+
+  function openRound2(s, role, now, rfxId, f) {
+    need(role, ["buyer"]);
+    var x = getRfx(s, rfxId);
+    if (x.round2) fail("This RFx already had its best and final round. There is one round only, as the suppliers were told.");
+    if (x.status !== "Evaluating") fail("Round 2 opens after the technical review and before an award is recommended.");
+    var el = scoreRFx(x, s, now).filter(function (q) { return q.eligible && !q.expired; });
+    if (el.length < 2) fail("A best and final round needs at least 2 eligible offers. With one, negotiate directly.");
+    var close = (f && f.closeDate) || addDays(dateOf(now), 3);
+    if (!validDate(close) || close < dateOf(now)) fail("Round 2 cannot close in the past.");
+    var ranks = {}, first = {};
+    el.forEach(function (q, i) {
+      ranks[q.supplierId] = i + 1;
+      first[q.supplierId] = { unitPrice: q.unitPrice, leadDays: q.leadDays, terms: q.terms, termsDays: q.termsDays, landed: q.landed, adjusted: q.adjusted };
+    });
+    x.round2 = { openedAt: now, closeDate: close, invited: el.map(function (q) { return q.supplierId; }), of: el.length, ranks: ranks, first: first, offers: {}, closedAt: null };
+    x.status = "Round 2";
+    log(s, now, role, x.id, "Round 2 opened", "Best and final round for " + el.map(function (q) { return supplier(q.supplierId).name; }).join(", ") +
+      ". Closes " + close + ". Round 1 offers stay binding.");
+    return x;
+  }
+
+  function addRound2Offer(s, role, now, rfxId, f) {
+    need(role, ["buyer"]);
+    var x = getRfx(s, rfxId);
+    if (x.status !== "Round 2") fail("Round 2 is not open on this RFx.");
+    var sp = supplier(f.supplierId);
+    if (x.round2.invited.indexOf(f.supplierId) < 0) fail(sp.name + " is not in round 2. Only eligible offers from round 1 are invited.");
+    var q = x.quotes.find(function (z) { return z.supplierId === f.supplierId; }), one = x.round2.first[f.supplierId];
+    var blank = function (v) { return v === undefined || v === null || v === ""; };
+    var price = Number(f.unitPrice), lead = blank(f.leadDays) ? one.leadDays : Number(f.leadDays), terms = blank(f.terms) ? one.terms : String(f.terms).trim();
+    if (!(price > 0)) fail("Enter the round 2 unit price.");
+    if (price > one.unitPrice) fail(sp.name + "'s round 2 price of " + fmt(price) + " is higher than its binding round 1 price of " + fmt(one.unitPrice) +
+      ". A round 2 offer can only be the same or lower.");
+    if (!Number.isInteger(lead) || lead < 1) fail("Lead time must be a whole number of days, at least 1.");
+    if (lead > one.leadDays) fail(sp.name + "'s round 2 lead time cannot be longer than round 1 (" + one.leadDays + " days).");
+    var td = termsDays({ terms: terms }, sp);
+    if (td < one.termsDays) fail(sp.name + "'s round 2 payment terms cannot be shorter than round 1 (net " + one.termsDays + ").");
+    q.unitPrice = price; q.leadDays = lead; q.terms = terms; q.round = 2;
+    x.round2.offers[f.supplierId] = { at: now };
+    log(s, now, role, x.id, "Round 2 offer: " + sp.name, fmt(one.unitPrice) + " to " + fmt(price) + " each, " + lead + " days lead time" + (terms ? ", " + terms : ""));
+    return x;
+  }
+
+  function closeRound2(s, role, now, rfxId) {
+    need(role, ["buyer"]);
+    var x = getRfx(s, rfxId);
+    if (x.status !== "Round 2") fail("Round 2 is not open on this RFx.");
+    x.round2.closedAt = now; x.status = "Evaluating";
+    var silent = x.round2.invited.filter(function (id) { return !x.round2.offers[id]; });
+    log(s, now, role, x.id, "Round 2 closed", (x.round2.invited.length - silent.length) + " of " + x.round2.invited.length + " improved their offer" +
+      (silent.length ? ". Round 1 stands for " + silent.map(function (id) { return supplier(id).name; }).join(", ") : ""));
+    return x;
+  }
+
+  // What round 2 saved on one supplier's offer, on landed cost, per unit and for the order.
+  function round2Saving(s, x, supId) {
+    if (!x.round2 || !x.round2.first[supId]) return null;
+    var q = x.quotes.find(function (z) { return z.supplierId === supId; }), one = x.round2.first[supId], qty = getReq(s, x.requestId).qty;
+    var unit = round2c(one.landed - quoteLanded(q));
+    return { unit: unit, total: round2c(unit * qty), pct: one.landed ? round1(unit / one.landed * 100) : 0, from: one.landed, to: quoteLanded(q) };
+  }
+
+  // The rank only email for one supplier. Nothing about other offers goes in it.
+  function round2Draft(s, x, supId, fromName) {
+    var r = getReq(s, x.requestId), it = item(r.itemId), sp = supplier(supId), one = x.round2.first[supId];
+    var units = plural(r.qty, it.uom, it.uom === "ea" ? "units" : it.uom + "s");
+    return {
+      to: contactOf(s, supId), subject: x.id + " " + it.name + ": best and final offer by " + longDate(x.round2.closeDate),
+      body: "Hi " + sp.name + " team,\n\nThank you for your offer on " + x.id + " for " + units + " of " + it.name + ".\n\n" +
+        "After the technical review and our total cost comparison, your offer ranks " + ordinal(x.round2.ranks[supId]) + " of " + x.round2.of + ". " +
+        "The comparison looks at landed cost, lead time against our need date, payment terms and supplier status, not only the unit price. " +
+        "We do not share other suppliers' offers.\n\n" +
+        "Your round 1 offer of " + fmt(one.unitPrice) + " per " + (it.uom === "ea" ? "unit" : it.uom) + ", " + one.leadDays + " days lead time" + (one.terms ? " and " + one.terms : "") + " stays binding. " +
+        "If you wish to improve it, please reply by " + longDate(x.round2.closeDate) + " with your best and final price, lead time and terms.\n\n" +
+        "This is the only further round. We will not ask again.\n\nThank you,\n" + fromName
+    };
+  }
+  function logRound2Draft(s, role, now, rfxId, supId, via) {
+    need(role, ["buyer"]);
+    var x = getRfx(s, rfxId);
+    log(s, now, role, x.id, "Round 2 email drafted for " + supplier(supId).name, "Opened through " + via + ". The app cannot tell if it was sent.");
+  }
+
   function addQuote(s, role, now, rfxId, f) {
     need(role, ["buyer"]);
     var x = getRfx(s, rfxId);
@@ -445,6 +551,7 @@
     need(role, ["buyer"]);
     var x = getRfx(s, rfxId);
     if (x.status === "Technical review") fail("The technical evaluation is not done yet. It is with the " + roleLabel(x.techRole) + ".");
+    if (x.status === "Round 2") fail("Round 2 is still open. Close it before recommending an award.");
     if (x.status !== "Evaluating") fail("Close bidding before awarding.");
     var ranked = scoreRFx(x, s, now);
     var pick = ranked.find(function (q) { return q.supplierId === supplierId; });
@@ -1539,6 +1646,7 @@
       add("RFx open for quotes", s.rfx.filter(function (x) { return x.status === "Open"; }).length, "rfx");
       add("RFx in technical review", s.rfx.filter(function (x) { return x.status === "Technical review"; }).length, "rfx");
       add("RFx ready for your award recommendation", s.rfx.filter(function (x) { return x.status === "Evaluating"; }).length, "rfx");
+      add("RFx in a best and final round", s.rfx.filter(function (x) { return x.status === "Round 2"; }).length, "rfx");
       add("POs not yet confirmed by supplier", s.pos.filter(function (po) { return poStatus(s, po) === "Issued"; }).length, "pos");
       add("POs to chase with the supplier", expediteList(s, now || new Date().toISOString()).length, "expedite");
       add("Invoice exceptions on your desk", invFor("buyer"), "invoices");
@@ -1606,6 +1714,8 @@
     createRequest: createRequest, cancelRequest: cancelRequest, decide: decide,
     startRFx: startRFx, addQuote: addQuote, closeBidding: closeBidding, scoreRFx: scoreRFx,
     setAdjustments: setAdjustments, adjOf: adjOf, ADJ_FIELDS: ADJ_FIELDS,
+    rfxStrategy: rfxStrategy, openRound2: openRound2, addRound2Offer: addRound2Offer, closeRound2: closeRound2, round2Saving: round2Saving,
+    round2Draft: round2Draft, logRound2Draft: logRound2Draft, ordinal: ordinal,
     techEvaluate: techEvaluate, techSubmit: techSubmit, recommendAward: recommendAward, decideAward: decideAward, techReviewer: techReviewer,
     createPO: createPO, confirmPO: confirmPO, updatePromise: updatePromise, amendPOPrice: amendPOPrice,
     grnTotals: grnTotals, postGRN: postGRN, releaseHold: releaseHold,

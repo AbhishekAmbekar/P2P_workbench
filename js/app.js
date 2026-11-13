@@ -44,7 +44,7 @@
     Ready: "ok", "On track": "info", "At risk": "warn", Blocked: "bad", Empty: "mut", High: "bad", Medium: "warn", Low: "mut",
     "Pending approval": "info", Approved: "ok", Rejected: "bad", Cancelled: "mut", Sourcing: "info", Awarded: "ok", Ordered: "ok",
     Service: "mut", "In progress": "info", Consumed: "ok", Submitted: "info",
-    Open: "info", "Technical review": "warn", Evaluating: "warn", "Award pending approval": "info", Pending: "mut", "Not reviewed": "mut",
+    Open: "info", "Technical review": "warn", Evaluating: "warn", "Round 2": "info", "Award pending approval": "info", Pending: "mut", "Not reviewed": "mut",
     Issued: "info", Confirmed: "ok", "Partially received": "warn", "Quality hold": "warn", Received: "ok", Closed: "mut",
     Accepted: "ok", Hold: "warn", Matched: "ok", Exception: "bad", Paid: "mut",
     Clear: "ok", "At Risk": "warn", Late: "bad", Delivered: "mut",

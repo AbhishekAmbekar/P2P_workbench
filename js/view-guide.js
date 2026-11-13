@@ -56,6 +56,16 @@
           "<b>Supplier rating.</b> Each point below a rating of 85 adds 0.2% of landed cost, for rework, rejects and extra checks."
         ]) +
         "<p>These are defaults. The Buyer can change them on each RFx while bidding is open, and every change is logged. They lock when bidding closes, together with each supplier's delivery record, so nobody can tune them after seeing the prices. A pick that is not the lowest adjusted price needs a written reason and goes to the Executive. The values are estimates a buyer sets, not measured costs. Pricing them from each supplier's actual history in the app is a planned next step.</p>") +
+      section("Best and final round (round 2)",
+        "<p>After the technical review the app suggests a next step from the number of eligible offers and the gap between them. It is a rule of thumb, not a calculated optimum. With one eligible offer it suggests negotiating directly, because another round adds no competition. With two or more it suggests one best and final round.</p>" +
+        list([
+          "<b>Who is invited.</b> Only offers that passed the technical review, from qualified suppliers with valid quotes and documents.",
+          "<b>Rank only.</b> Each supplier gets an email draft with its own rank, such as 2nd of 3, and its own round 1 offer. No other supplier's name or price is in it. The app opens it in your mail program and logs it as drafted.",
+          "<b>Binding.</b> Round 1 offers stay binding. A round 2 offer can lower the price, shorten the lead time or lengthen the payment terms, never the reverse. A supplier that does not reply keeps its round 1 offer.",
+          "<b>One round only.</b> The email says so, so suppliers have no reason to hold back for a third. The app does not allow a second round 2.",
+          "<b>Same yardstick.</b> The adjustment values stay locked from bid close, so the ranking after round 2 is on the same basis as before."
+        ]) +
+        "<p>The Buyer enters replies as they arrive by email, because there is no supplier portal. When round 2 closes, the RFx shows what it saved on landed cost, and the approver sees the saving on the recommended offer. The PO is issued at the round 2 price. Live auctions with suppliers bidding on their own screens would need a backend and are not built.</p>") +
       section("Projects",
         "<p>Some work needs several purchases to come together by one date: a pump overhaul, a shutdown, a product launch. A project groups those requests and shows them as one job. Everyday buying needs no project.</p>" +
         "<p>The Requester creates a project with a name, a target date and a criticality: High if a slip stops a line or a customer date, Medium or Low otherwise. A downtime cost per day is optional, because it usually comes from production planning or plant finance. Without it the app shows the delay in days and never makes up a figure.</p>" +
