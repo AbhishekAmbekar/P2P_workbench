@@ -57,6 +57,10 @@
 
   // ---------- small helpers ----------
   var m2 = function (n) { return (Math.round(Number(n) * 100) / 100).toFixed(2); };
+  var adjText = function (a) {
+    return "capital " + a.capitalPct + "%, terms net " + a.baseTermsDays + ", conditional $" + a.conditionalCost + ", buffer " + a.bufferDays +
+      " days at " + a.dayPct + "%, rating " + a.qualityTarget + " at " + a.qualityPct + "%";
+  };
   var yes = function (b) { return b ? "Yes" : "No"; };
   var key = function (t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]/g, ""); };
   var clean = function (v) { return String(v === null || v === undefined ? "" : v).trim(); };
@@ -147,20 +151,20 @@
         }));
     } },
 
-    // One row per invited supplier, with the score for those who quoted.
+    // One row per invited supplier, with the adjusted price for those who quoted.
     rfx: { file: "rfx-quotes", label: "RFx quotes", build: function (s, now) {
-      var rows = [["RFx", "Type", "RFx status", "Request", "PR", "Item", "Quantity", "Weights price/lead/quality", "Supplier", "Supplier status",
-        "Quote", "Unit price", "Tariff %", "Freight per unit", "Landed unit", "Lead days", "Valid until", "Terms", "Score", "Rank", "Can win", "Awarded",
+      var rows = [["RFx", "Type", "RFx status", "Request", "PR", "Item", "Quantity", "Adjustment values", "Supplier", "Supplier status",
+        "Quote", "Unit price", "Tariff %", "Freight per unit", "Landed unit", "Lead days", "Valid until", "Terms", "Adjusted unit", "Rank", "Can win", "Awarded",
         "Technical", "Technical note"]];
       s.rfx.forEach(function (x) {
         var r = s.requests.find(function (q) { return q.id === x.requestId; }) || {};
-        var base = [x.id, x.type, x.status, x.requestId, r.prNo, r.itemId, r.qty, x.weights.price + "/" + x.weights.lead + "/" + x.weights.quality];
+        var base = [x.id, x.type, x.status, x.requestId, r.prNo, r.itemId, r.qty, adjText(P.adjOf(x))];
         var ranked = P.scoreRFx(x, s, now);
         ranked.forEach(function (q, i) {
           var why = q.eligible ? (q.expired ? "Quote expired" : "Yes") : q.tech === "Pending" ? "Waiting for the technical review" : !q.techOk ? "No, fails the technical check" :
             q.supplierStatus === "Not qualified" ? "No, not qualified" : "No, document expired or missing";
           rows.push(base.concat([supName(q.supplierId), q.supplierStatus, "Quoted", m2(q.unitPrice), q.tariffPct, m2(q.freight), m2(q.landed), q.leadDays,
-            q.validUntil, q.terms, q.total, i + 1, why, yes(x.award && x.award.supplierId === q.supplierId), q.tech, q.techNote]));
+            q.validUntil, q.terms, m2(q.adjusted), i + 1, why, yes(x.award && x.award.supplierId === q.supplierId), q.tech, q.techNote]));
         });
         x.invited.filter(function (id) { return !x.quotes.some(function (q) { return q.supplierId === id; }); }).forEach(function (id) {
           rows.push(base.concat([supName(id), (supplier(id) || {}).status, "No quote", "", "", "", "", "", "", "", "", "", "", "No", "", ""]));

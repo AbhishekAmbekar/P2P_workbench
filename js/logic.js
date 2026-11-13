@@ -254,13 +254,10 @@
     if (invited.length < 2 && sole.length < 10) {
       fail("Invite at least two suppliers, or explain why only one is possible (sole source reason).");
     }
-    var w = { price: Number(f.wPrice), lead: Number(f.wLead), quality: Number(f.wQuality) };
-    if ([w.price, w.lead, w.quality].some(function (n) { return !(n >= 0); }) || w.price + w.lead + w.quality !== 100) {
-      fail("Scoring weights must be zero or more and add up to 100.");
-    }
+    var adj = readAdj(f, REF.adjust);
     var x = {
       id: nextId(s, "RFX", "RFX"), type: f.type === "RFP" ? "RFP" : "RFQ", requestId: r.id,
-      status: "Open", invited: invited, weights: w, soleReason: sole, quotes: [],
+      status: "Open", invited: invited, adj: adj, soleReason: sole, quotes: [],
       createdAt: now, closeDate: f.closeDate || null, award: null
     };
     s.rfx.push(x);
@@ -270,6 +267,62 @@
       (sole ? ". Sole source reason: " + sole : ""));
     return x;
   }
+
+  // ---------- 2a. adjusted price (bonus and malus) ----------
+  // Each difference that is not in the price gets a dollar value, so every offer competes on one number. The values
+  // are set per RFx (defaults in REF.adjust) and lock when bidding closes, so they cannot be tuned after seeing prices.
+  var ADJ_FIELDS = [
+    ["capitalPct", "Cost of capital (% a year)", 0, 30], ["baseTermsDays", "Standard payment terms (days)", 0, 180],
+    ["conditionalCost", "Extra checks for a conditional supplier (per award)", 0, 1000000],
+    ["bufferDays", "Schedule buffer before the need date (days)", 0, 90], ["dayPct", "Cost per day short of the buffer (% of landed)", 0, 10],
+    ["qualityTarget", "Supplier rating target", 0, 100], ["qualityPct", "Cost per rating point below target (% of landed)", 0, 10]
+  ];
+  function readAdj(f, base) {
+    var out = {};
+    ADJ_FIELDS.forEach(function (d) {
+      var v = f[d[0]];
+      v = v === undefined || v === null || v === "" ? base[d[0]] : Number(v);
+      if (!(v >= d[2] && v <= d[3])) fail(d[1] + " must be between " + d[2] + " and " + d[3] + ".");
+      out[d[0]] = v;
+    });
+    return out;
+  }
+  var adjOf = function (x) { return x.adj || Object.assign({}, REF.adjust); };
+  // The day offers are measured from: bidding close once closed, today while open.
+  var evalDateOf = function (x, now) { return x.evalDate || (x.status === "Open" ? dateOf(now || new Date().toISOString()) : dateOf(x.createdAt)); };
+  var termsDays = function (q, sp) { var m = /net\s*(\d+)/i.exec(q.terms || ""); return m ? Number(m[1]) : sp.terms; };
+
+  function setAdjustments(s, role, now, rfxId, f) {
+    need(role, ["buyer"]);
+    var x = getRfx(s, rfxId);
+    if (x.status !== "Open") fail("The adjustment values locked when bidding closed, so they cannot be changed after the prices are known.");
+    var old = adjOf(x), adj = readAdj(f, old);
+    var changed = ADJ_FIELDS.filter(function (d) { return old[d[0]] !== adj[d[0]]; });
+    if (!changed.length) fail("Nothing changed.");
+    x.adj = adj;
+    log(s, now, role, x.id, "Adjustment values changed", changed.map(function (d) { return d[1] + " " + old[d[0]] + " to " + adj[d[0]]; }).join("; "));
+    return x;
+  }
+
+  // The bonus and malus lines for one offer, and its adjusted unit price.
+  function adjustQuote(s, x, z, landed, now) {
+    var a = adjOf(x), sp = supplier(z.supplierId), r = getReq(s, x.requestId), lines = [];
+    var add = function (amount, label) { amount = round2c(amount); if (amount) lines.push({ kind: amount < 0 ? "Bonus" : "Malus", amount: amount, label: label }); };
+    var td = termsDays(z, sp);
+    add(landed * a.capitalPct / 100 * (a.baseTermsDays - td) / 365,
+      "Net " + td + " against standard net " + a.baseTermsDays + ", at " + a.capitalPct + "% a year");
+    if (sp.status === "Conditional") add(a.conditionalCost / r.qty, "Conditional supplier: " + fmt(a.conditionalCost) + " of extra checks over " + r.qty + " units");
+    var slip = x.slips && x.slips[z.supplierId] !== undefined ? x.slips[z.supplierId] : (function () { var rec = deliveryRecord(s, z.supplierId); return rec.enough ? rec.typicalSlip : 0; })();
+    var ready = addDays(evalDateOf(x, now), z.leadDays + slip), slack = daysBetween(ready, r.needBy), short = Math.max(0, a.bufferDays - slack);
+    var n = function (k, w) { return k + " " + w + (k === 1 ? "" : "s"); };
+    add(landed * a.dayPct / 100 * short, (slack < 0 ? "Ready " + n(-slack, "day") + " after the need date" : "Ready " + n(slack, "day") + " before the need date") +
+      (slip ? ", planned on a usual slip of " + n(slip, "day") : "") + ": " + n(short, "day") + " short of the " + a.bufferDays + " day buffer");
+    var pts = Math.max(0, a.qualityTarget - sp.quality);
+    add(landed * a.qualityPct / 100 * pts, "Rating " + sp.quality + ", " + n(pts, "point") + " below the target of " + a.qualityTarget);
+    var sum = lines.reduce(function (t, l) { return t + l.amount; }, 0);
+    return { lines: lines, adjusted: round2c(landed + sum), ready: ready, slack: slack, slip: slip, termsDays: td };
+  }
+  var round2c = function (n) { return Math.round(n * 100) / 100; };
 
   function addQuote(s, role, now, rfxId, f) {
     need(role, ["buyer"]);
@@ -322,6 +375,10 @@
     var it = item(getReq(s, x.requestId).itemId);
     x.techRole = techReviewer(it);
     x.status = "Technical review";
+    // The adjustment values and the day offers are measured from are fixed from here on.
+    x.adj = adjOf(x); x.evalDate = dateOf(now);
+    x.slips = {};
+    x.quotes.forEach(function (q) { var rec = deliveryRecord(s, q.supplierId); x.slips[q.supplierId] = rec.enough ? rec.typicalSlip : 0; });
     log(s, now, role, x.id, "Bidding closed", x.quotes.length + " of " + x.invited.length + " invited suppliers quoted. Sent to " +
       roleLabel(x.techRole) + " for technical evaluation");
     return x;
@@ -359,31 +416,26 @@
   // Older saved RFx never had a technical review. Their quotes count as acceptable.
   var techOk = function (x, q) { return !x.techRole || !!(q.tech && q.tech.result === "Acceptable"); };
 
-  // Price is scored on landed cost (price plus tariff plus freight), so a tariff can change the winner.
+  // Offers are ranked on the adjusted price: landed cost (price plus tariff plus freight) plus bonus and malus for
+  // payment terms, a conditional supplier, schedule risk and the supplier rating. Lowest first.
   // Pass the state and the current time to also check supplier documents and quote expiry.
   function scoreRFx(x, s, now) {
     var q = x.quotes;
     if (!q.length) return [];
-    var landed = q.map(quoteLanded);
-    var minP = Math.min.apply(null, landed);
-    var minL = Math.min.apply(null, q.map(function (z) { return z.leadDays; }));
-    var w = x.weights;
     var today = now ? dateOf(now) : null;
     var cat = s ? item(getReq(s, x.requestId).itemId).category : null;
-    return q.map(function (z, i) {
-      var sp = supplier(z.supplierId);
-      var p = minP / landed[i] * 100, l = minL / z.leadDays * 100, qs = sp.quality;
-      var total = (p * w.price + l * w.lead + qs * w.quality) / 100;
+    return q.map(function (z) {
+      var sp = supplier(z.supplierId), landed = quoteLanded(z), a = adjustQuote(s, x, z, landed, now);
       var docs = s && today ? blockingDocs(docIssues(s, z.supplierId, today, cat)) : [];
       return {
-        supplierId: z.supplierId, unitPrice: z.unitPrice, tariffPct: z.tariffPct || 0, freight: z.freight || 0, landed: landed[i],
+        supplierId: z.supplierId, unitPrice: z.unitPrice, tariffPct: z.tariffPct || 0, freight: z.freight || 0, landed: landed,
         validUntil: z.validUntil || null, expired: !!(today && z.validUntil && z.validUntil < today),
         leadDays: z.leadDays, terms: z.terms, supplierStatus: sp.status, docIssues: docs,
         tech: z.tech ? z.tech.result : (x.techRole ? "Pending" : "Not reviewed"), techNote: z.tech ? z.tech.note : "", techOk: techOk(x, z),
-        scores: { price: round1(p), lead: round1(l), quality: qs }, total: round1(total),
+        adjustments: a.lines, adjusted: a.adjusted, ready: a.ready, slack: a.slack, slip: a.slip, termsDays: a.termsDays,
         eligible: sp.status !== "Not qualified" && docs.length === 0 && techOk(x, z)
       };
-    }).sort(function (a, b) { return b.total - a.total; });
+    }).sort(function (a, b) { return a.adjusted - b.adjusted || a.landed - b.landed; });
   }
 
   // The Buyer recommends a supplier. The award only stands once the approval chain signs it off.
@@ -408,7 +460,7 @@
     var reasons = [];
     if (sp.status === "Conditional") reasons.push("conditional supplier");
     if (ranked.length < 2) reasons.push("only one bid");
-    if (eligible[0].supplierId !== supplierId) reasons.push("not the top scored eligible quote");
+    if (eligible[0].supplierId !== supplierId) reasons.push("not the lowest adjusted price");
     var j = (justification || "").trim();
     if (reasons.length && j.length < 10) fail("A written justification is required (" + reasons.join(", ") + ").");
     var r = getReq(s, x.requestId), value = cents(r.qty * pick.landed) / 100;
@@ -418,7 +470,7 @@
     x.awardApprovals = chain.map(function (rl) { return { role: rl, status: "Pending", at: null, comment: "" }; });
     x.status = "Award pending approval";
     log(s, now, role, x.id, "Award recommended: " + sp.name + " for " + fmt(value),
-      (j || "Top scored eligible quote") + ". Approval chain: " + chain.map(roleLabel).join(" then ") +
+      (j || "Lowest adjusted price among eligible offers") + ". Approval chain: " + chain.map(roleLabel).join(" then ") +
       (reasons.length ? ". Escalated for: " + reasons.join(", ") : ""));
     return x;
   }
@@ -1553,6 +1605,7 @@
     newState: newState, requestTotal: requestTotal, poTotal: poTotal, buildChain: buildChain,
     createRequest: createRequest, cancelRequest: cancelRequest, decide: decide,
     startRFx: startRFx, addQuote: addQuote, closeBidding: closeBidding, scoreRFx: scoreRFx,
+    setAdjustments: setAdjustments, adjOf: adjOf, ADJ_FIELDS: ADJ_FIELDS,
     techEvaluate: techEvaluate, techSubmit: techSubmit, recommendAward: recommendAward, decideAward: decideAward, techReviewer: techReviewer,
     createPO: createPO, confirmPO: confirmPO, updatePromise: updatePromise, amendPOPrice: amendPOPrice,
     grnTotals: grnTotals, postGRN: postGRN, releaseHold: releaseHold,

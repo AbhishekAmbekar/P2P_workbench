@@ -1,11 +1,43 @@
 /* RFx: start sourcing for an approved PR, collect quotes, technical evaluation by the user side,
- * compare acceptable offers on a weighted score, the Buyer recommends, the Director (and Executive) approve.
+ * compare acceptable offers on one adjusted price (bonus and malus), the Buyer recommends, the Director (and Executive) approve.
  * App.sel.rfx holds the selected RFx id. App.sel.rfxNew holds the request id being sourced. */
 (function () {
   "use strict";
   var App = window.App, P = App.P, REF = App.REF, esc = App.esc;
 
   function reqOf(x) { return App.state.requests.find(function (r) { return r.id === x.requestId; }); }
+
+  // The adjustment values: inputs while they can change, a plain list once locked.
+  var ADJ_HELP = {
+    capitalPct: "What a day of supplier credit is worth",
+    baseTermsDays: "Your company's normal payment terms",
+    conditionalCost: "First article and extra incoming checks, once per award",
+    bufferDays: "How early the goods should be ready",
+    dayPct: "Expediting, premium freight or waiting, per day short",
+    qualityTarget: "The supplier rating the plant expects",
+    qualityPct: "Rework, rejects and checks, per point below"
+  };
+  function adjInputs(a) {
+    return P.ADJ_FIELDS.map(function (d) {
+      return '<label>' + esc(d[1]) + '<input type="number" name="' + d[0] + '" min="' + d[2] + '" max="' + d[3] + '" step="any" value="' + a[d[0]] + '">' +
+        '<span class="hint">' + esc(ADJ_HELP[d[0]]) + "</span></label>";
+    }).join("");
+  }
+  function adjList(a) {
+    return '<div class="wrap flat"><table><tr><th>Adjustment</th><th class="num">Value</th><th>What it covers</th></tr>' + P.ADJ_FIELDS.map(function (d) {
+      var v = d[0] === "conditionalCost" ? App.money(a[d[0]]) : String(a[d[0]]);
+      return "<tr><td>" + esc(d[1]) + '</td><td class="num">' + esc(v) + "</td><td>" + esc(ADJ_HELP[d[0]]) + "</td></tr>";
+    }).join("") + "</table></div>";
+  }
+  function adjCard(x) {
+    var a = P.adjOf(x), open = x.status === "Open";
+    if (open && App.role === "buyer") {
+      return '<details class="adjbox"><summary>Adjustment values (bonus and malus). Change them before bidding closes.</summary>' +
+        '<form data-form="rfxAdjust" data-id="' + x.id + '" class="form">' + adjInputs(a) +
+        '<div class="wide actions"><button type="submit" class="ghost">Save adjustment values</button></div></form></details>';
+    }
+    return '<details class="adjbox"><summary>Adjustment values' + (open ? ", set by the Buyer" : ", locked when bidding closed on " + esc(x.evalDate || "") ) + "</summary>" + adjList(a) + "</details>";
+  }
 
   // Links from other screens pass either a request id (start an RFx) or an RFx id (open it).
   var baseGoto = App.actions.goto;
@@ -34,9 +66,9 @@
       '<label>Type<select name="type"><option value="RFQ">RFQ (price and lead time)</option><option value="RFP">RFP (full proposal)</option></select></label>' +
       '<label>Bids close on<input type="date" name="closeDate" value="' + P.addDays(App.today(), 7) + '"></label>' +
       '<div class="wide"><div class="hint">Invite suppliers (' + esc(it.category) + ")</div>" + boxes + "</div>" +
-      '<label>Weight: price<input type="number" name="wPrice" value="50" min="0" max="100"></label>' +
-      '<label>Weight: lead time<input type="number" name="wLead" value="25" min="0" max="100"></label>' +
-      '<label>Weight: supplier quality<input type="number" name="wQuality" value="25" min="0" max="100"></label>' +
+      '<details class="wide adjbox"><summary>Adjustment values (bonus and malus). Defaults shown. They lock when bidding closes.</summary>' +
+      '<p class="hint">Offers are compared on one adjusted price: landed cost plus a dollar value for each difference that is not in the price.</p>' +
+      '<div class="form">' + adjInputs(REF.adjust) + "</div></details>" +
       '<label class="wide">Sole source reason (only needed when inviting one supplier)<input name="soleReason"></label>' +
       '<div class="wide actions"><button type="submit">Open the RFx</button>' +
       '<button type="button" class="ghost" data-act="rfxCancelNew">Not now</button></div></form></div>';
@@ -46,10 +78,9 @@
     var invited = Array.prototype.map.call(form.querySelectorAll('input[name="inv"]:checked'), function (e) { return e.value; });
     var reqId = form.dataset.id;
     var x = App.run(function (s, role, now) {
-      return P.startRFx(s, role, now, reqId, {
-        type: data.type, invited: invited, closeDate: data.closeDate, soleReason: data.soleReason,
-        wPrice: data.wPrice, wLead: data.wLead, wQuality: data.wQuality
-      });
+      var f = { type: data.type, invited: invited, closeDate: data.closeDate, soleReason: data.soleReason };
+      P.ADJ_FIELDS.forEach(function (d) { f[d[0]] = data[d[0]]; });
+      return P.startRFx(s, role, now, reqId, f);
     }, function (x) { return x.id + " is open for quotes."; });
     if (x) { App.sel.rfxNew = null; App.sel.rfx = x.id; App.render(); }
   };
@@ -61,6 +92,10 @@
       return P.addQuote(s, role, now, id, { supplierId: data.supplierId, unitPrice: data.unitPrice, leadDays: data.leadDays, terms: data.terms,
         tariffPct: data.tariffPct, freight: data.freight, validUntil: data.validUntil });
     }, "Quote recorded.");
+  };
+  App.actions.rfxAdjust = function (data, form) {
+    var id = form.dataset.id;
+    App.run(function (s, role, now) { return P.setAdjustments(s, role, now, id, data); }, "Adjustment values saved. The ranking below uses them.");
   };
   App.actions.rfxRevalidate = function (data, form) {
     var id = form.dataset.id;
@@ -109,11 +144,19 @@
       '<div class="wide actions"><button type="submit">Save quote</button></div></form>';
   }
 
+  function adjCell(q) {
+    if (!q.adjustments.length) return '<span class="muted">None</span>';
+    return q.adjustments.map(function (l) {
+      return '<div class="adjline"><span><b class="' + (l.kind === "Bonus" ? "bonus" : "malus") + '">' + l.kind + "</b> " + esc(l.label) + '</span><span class="num">' +
+        (l.amount < 0 ? "−" + App.money(-l.amount) : "+" + App.money(l.amount)) + "</span></div>";
+    }).join("");
+  }
+
   function compareTable(x, canAward) {
     var ranked = P.scoreRFx(x, App.state, App.now()), r = reqOf(x);
     var top = ranked.filter(function (q) { return q.eligible; })[0];
-    var head = "<tr><th>#</th><th>Supplier</th><th>Technical</th><th class=\"num\">Landed unit</th><th class=\"num\">Landed total</th><th class=\"num\">Lead</th><th>Valid until</th>" +
-      '<th class="num">Score</th><th></th></tr>';
+    var head = "<tr><th>#</th><th>Supplier</th><th>Technical</th><th class=\"num\">Landed unit</th><th>Adjustments per unit</th><th class=\"num\">Adjusted unit</th>" +
+      '<th>Ready and validity</th><th></th></tr>';
     var rows = ranked.map(function (q, i) {
       var sp = App.supplier(q.supplierId), won = x.award && x.award.supplierId === q.supplierId;
       var picked = !won && x.recommendation && x.recommendation.supplierId === q.supplierId;
@@ -130,16 +173,19 @@
         else if (q.expired) cell = App.pill("Quote expired", "bad");
         else cell = '<button class="small" data-act="rfxAward" data-id="' + x.id + '" data-sup="' + q.supplierId + '">Recommend</button>';
       }
-      return "<tr" + (won ? ' class="sel"' : "") + "><td>" + (i + 1) + "</td><td>" + esc(sp.name) + '<div style="margin-top:3px">' + App.status(q.supplierStatus) + "</div></td><td>" + tech +
+      return "<tr" + (won ? ' class="sel"' : "") + "><td>" + (i + 1) + "</td><td>" + esc(sp.name) + '<div style="margin-top:3px">' + App.status(q.supplierStatus) + "</div>" +
+        '<div class="hint">rating ' + sp.quality + ", net " + q.termsDays + "</div></td><td>" + tech +
         '</td><td class="num">' + App.money(q.landed) + (q.landed !== q.unitPrice ? '<div class="hint">price ' + App.money(q.unitPrice) + "</div>" : "") +
         (q.tariffPct || q.freight ? '<div class="hint">' + q.tariffPct + "% tariff" + (q.freight ? ", " + App.money(q.freight) + " freight" : "") + "</div>" : "") +
-        '</td><td class="num">' + App.money(q.landed * r.qty) + '</td><td class="num">' + q.leadDays + " d</td><td>" + esc(q.validUntil || "") + (q.expired ? " " + App.pill("expired", "bad") : "") + "</td>" +
-        '<td class="num"><b>' + q.total + '</b><div class="hint nw" data-tip="Points out of 100 for price, lead time and supplier quality">' + q.scores.price + " / " + q.scores.lead + " / " + q.scores.quality + "</div></td><td>" + cell + "</td></tr>";
+        '</td><td class="adjcell">' + adjCell(q) + '</td><td class="num"><b>' + App.money(q.adjusted) + '</b><div class="hint">' + App.money(q.adjusted * r.qty) + " for " + r.qty + "</div></td>" +
+        '<td class="nw">' + q.leadDays + " days lead" + '<div class="hint">ready ' + esc(q.ready) + (q.slack < 0 ? ", " + (-q.slack) + " days late" : "") + "</div>" +
+        '<div class="hint">valid until ' + esc(q.validUntil || "") + "</div>" + (q.expired ? App.pill("expired", "bad") : "") + "</td><td>" + cell + "</td></tr>";
     }).join("");
-    return '<div class="wrap"><table>' + head + rows + "</table></div>" +
-      '<p class="hint">Scores run 0 to 100. Under each score are its points for price, lead time and quality. Price points use landed cost, which is price plus tariff plus freight per unit, so a tariff can change the winner. Lead time is scored against the fastest quote. Quality is the supplier rating. Weights: price ' +
-      x.weights.price + ", lead time " + x.weights.lead + ", quality " + x.weights.quality + "." +
-      (top ? " Top eligible quote: " + esc(App.supplier(top.supplierId).name) + "." : "") + "</p>" +
+    return adjCard(x) + '<div class="wrap"><table>' + head + rows + "</table></div>" +
+      '<p class="hint">Ranked on the adjusted price, lowest first: landed cost (price, tariff and freight) plus a dollar value per unit for payment terms, ' +
+      "a conditional supplier, schedule risk against the need date of " + esc(r.needBy) + " and the supplier rating. A bonus lowers the price, a malus raises it. " +
+      "Ready dates count from " + (x.status === "Open" ? "today" : "the day bidding closed") + " and add the supplier's usual slip once it has 3 or more deliveries on record." +
+      (top ? " Lowest eligible: " + esc(App.supplier(top.supplierId).name) + "." : "") + "</p>" +
       (ranked.some(function (q) { return q.docIssues.length; }) ? '<div class="note warn">' + ranked.filter(function (q) { return q.docIssues.length; }).map(function (q) {
         return esc(App.supplier(q.supplierId).name) + ": " + q.docIssues.map(function (d) { return esc(d.label) + (d.status === "Missing" ? " missing" : " expired " + d.expires); }).join(", ");
       }).join(". ") + ". Quality must record a renewal on the Suppliers tab before an award or PO.</div>" : "");
@@ -183,11 +229,21 @@
     }).join(" ") + "</div>";
   }
 
+  // How the recommended offer compares with the next eligible one on the adjusted price, for the approver.
+  function gapText(x, supId) {
+    var ranked = P.scoreRFx(x, App.state, App.now()).filter(function (q) { return q.eligible; }), r = reqOf(x);
+    var pick = ranked.find(function (q) { return q.supplierId === supId; }), other = ranked.find(function (q) { return q.supplierId !== supId; });
+    if (!pick || !other) return "";
+    var d = (other.adjusted - pick.adjusted) * r.qty;
+    return "Adjusted price " + App.money(pick.adjusted) + " a unit. " + esc(App.supplier(other.supplierId).name) + " is " +
+      (d >= 0 ? App.money(d) + " higher" : App.money(-d) + " lower") + " for the order on the same basis. ";
+  }
+
   // The Buyer's recommendation, the approval chain, and the decision buttons for the approver whose turn it is.
   function approvalPanel(x) {
     var rec = x.recommendation, sp = App.supplier(rec.supplierId), step = x.awardApprovals.find(function (a) { return a.status === "Pending"; });
     var h = '<div class="note"><b>Recommended: ' + esc(sp.name) + "</b> for " + App.money(rec.value) + " landed. " +
-      (rec.justification ? "Reason: " + esc(rec.justification) + ". " : "Top scored acceptable offer. ") +
+      (rec.justification ? "Reason: " + esc(rec.justification) + ". " : "Lowest adjusted price among acceptable offers. ") + gapText(x, rec.supplierId) +
       (rec.reasons.length ? "Escalated to the Executive for: " + esc(rec.reasons.join(", ")) + "." : "") + "</div>" + chainPills(x.awardApprovals, true);
     if (App.role === step.role) {
       h += '<label class="hint" style="display:block;margin-top:10px">Comment (needed to reject)</label><textarea id="awardDecisionNote"></textarea>' +
@@ -209,7 +265,7 @@
     if (x.soleReason) h += '<div class="note warn">Sole source reason: ' + esc(x.soleReason) + "</div>";
 
     if (x.status === "Open") {
-      h += (x.quotes.length ? compareTable(x, false) + revalidateForm(x) : '<p class="empty">No quotes yet.</p>');
+      h += (x.quotes.length ? compareTable(x, false) + revalidateForm(x) : '<p class="empty">No quotes yet.</p>' + adjCard(x));
       if (buyer) {
         h += quoteForm(x) + '<div class="actions"><button class="ghost" data-act="rfxClose" data-id="' + x.id + '"' +
           (x.quotes.length ? "" : " disabled") + ">Close bidding and compare</button></div>";
@@ -225,7 +281,7 @@
       }
       h += compareTable(x, buyer) + revalidateForm(x);
       if (buyer) {
-        h += '<label class="hint" style="display:block;margin-top:10px">Justification (required for a conditional supplier, a single bid, or when not picking the top acceptable offer. Any of these also sends the award to the Executive.)</label>' +
+        h += '<label class="hint" style="display:block;margin-top:10px">Justification (required for a conditional supplier, a single bid, or when not picking the lowest adjusted price. Any of these also sends the award to the Executive.)</label>' +
           '<textarea id="awardNote"></textarea>' +
           '<p class="hint">Recommend sends the award for approval: the Director, plus the Executive from ' + App.money(REF.thresholds.executive).replace(/\.00$/, "") + ".</p>";
       } else h += '<div class="note">The Buyer recommends the award. Then the Director, and for large or risky awards the Executive, approve it.</div>';
