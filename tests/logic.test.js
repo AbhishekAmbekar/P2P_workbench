@@ -51,7 +51,7 @@ function approveAll(s, r) {
   let st;
   while ((st = r.approvals.find(a => a.status === "Pending"))) P.decide(s, st.role, NOW, r.id, "Approved", "ok");
 }
-const W = { wPrice: 50, wLead: 25, wQuality: 25 };
+const W = {};
 
 // ---------- 1. request and approvals ----------
 test("approval chain follows value tiers and category checks", () => {
@@ -104,26 +104,55 @@ function rfxFixture() {
   return { s, r };
 }
 
-test("RFx needs two suppliers or a sole source reason, and weights must total 100", () => {
+test("RFx needs two suppliers or a sole source reason, and adjustment values must be in range", () => {
   const { s, r } = rfxFixture();
-  throwsWith(() => P.startRFx(s, "buyer", NOW, r.id, Object.assign({ type: "RFQ", invited: ["northfield"] }, W)), "two suppliers");
-  throwsWith(() => P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield", "helio"], wPrice: 50, wLead: 50, wQuality: 50 }), "add up to 100");
-  throwsWith(() => P.startRFx(s, "buyer", NOW, r.id, Object.assign({ type: "RFQ", invited: ["northfield", "meridian"] }, W)), "does not supply");
-  const x = P.startRFx(s, "buyer", NOW, r.id, Object.assign({ type: "RFQ", invited: ["northfield"], soleReason: "Only qualified source for this enclosure" }, W));
+  throwsWith(() => P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield"] }), "two suppliers");
+  throwsWith(() => P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield", "helio"], capitalPct: 50 }), "Cost of capital (% a year) must be between 0 and 30");
+  throwsWith(() => P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield", "meridian"] }), "does not supply");
+  const x = P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield"], soleReason: "Only qualified source for this enclosure" });
   assert.strictEqual(x.status, "Open");
   assert.strictEqual(r.status, "Sourcing");
+  assert.deepStrictEqual(x.adj, P.REF.adjust, "a new RFx starts from the default adjustment values");
 });
 
-test("scoring ranks by weighted price, lead time and supplier quality", () => {
-  const { s, r } = rfxFixture();
-  const x = P.startRFx(s, "buyer", NOW, r.id, Object.assign({ type: "RFP", invited: ["northfield", "helio", "brightpath"] }, W));
+test("offers rank on the adjusted price: landed cost plus bonus and malus for terms, schedule, status and rating", () => {
+  const { s, r } = rfxFixture();   // 60 housings, need by 15 Nov, measured from 26 Oct while open
+  const x = P.startRFx(s, "buyer", NOW, r.id, { type: "RFP", invited: ["northfield", "helio", "brightpath"] });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 212, leadDays: 28 });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 205, leadDays: 40 });
   P.addQuote(s, "buyer", NOW, x.id, { supplierId: "brightpath", unitPrice: 219, leadDays: 24 });
-  const ranked = P.scoreRFx(x);
-  assert.strictEqual(ranked[0].supplierId, "brightpath");
-  assert.strictEqual(ranked[2].supplierId, "helio");
-  assert.ok(ranked[0].total > ranked[1].total);
+  const ranked = P.scoreRFx(x, s, NOW);
+  // Northfield: ready 8 days after the need date, 18 days short of the 10 day buffer: 212 x 0.5% x 18 = 19.08.
+  // Brightpath: 14 days short: 219 x 0.5% x 14 = 15.33. Helio: net 30 against net 45 at 8% a year = +0.67, 30 days short = +30.75.
+  assert.deepStrictEqual(ranked.map(q => [q.supplierId, q.adjusted]), [["northfield", 231.08], ["brightpath", 234.33], ["helio", 236.42]]);
+  assert.ok(ranked[2].adjustments.some(l => l.kind === "Malus" && l.amount === 0.67 && l.label.indexOf("Net 30 against standard net 45") === 0));
+  assert.strictEqual(ranked[0].slack, -8);
+  const k = P.newState(), kr = baseReq(k, { itemId: "CP-301", qty: 200, estUnit: 76 });
+  approveAll(k, kr);
+  const kx = P.startRFx(k, "buyer", NOW, kr.id, { type: "RFQ", invited: ["kestrel", "northfield"] });
+  P.addQuote(k, "buyer", NOW, kx.id, { supplierId: "kestrel", unitPrice: 70, leadDays: 5, terms: "Net 75" });
+  const kq = P.scoreRFx(kx, k, NOW)[0];
+  // Conditional: $600 over 200 units = +3.00. Rating 70 is 15 below 85: 70 x 0.2% x 15 = +2.10. Net 75: 70 x 8% x 30/365 = -0.46.
+  assert.deepStrictEqual(kq.adjustments.map(l => l.amount), [-0.46, 3, 2.1]);
+  assert.strictEqual(kq.adjustments[0].kind, "Bonus");
+  assert.strictEqual(kq.adjusted, 74.64);
+});
+
+test("the Buyer sets adjustment values while bidding is open, and they lock when it closes", () => {
+  const { s, r } = rfxFixture();
+  const x = P.startRFx(s, "buyer", NOW, r.id, { type: "RFQ", invited: ["northfield", "helio"], bufferDays: 5 });
+  assert.strictEqual(x.adj.bufferDays, 5);
+  throwsWith(() => P.setAdjustments(s, "requester", NOW, x.id, { dayPct: 1 }), "cannot do this");
+  throwsWith(() => P.setAdjustments(s, "buyer", NOW, x.id, { bufferDays: 5 }), "Nothing changed");
+  throwsWith(() => P.setAdjustments(s, "buyer", NOW, x.id, { dayPct: 20 }), "between 0 and 10");
+  P.setAdjustments(s, "buyer", NOW, x.id, { dayPct: 1, capitalPct: 10 });
+  assert.ok(s.audit.some(a => a.entity === x.id && a.action === "Adjustment values changed" && a.note.indexOf("Cost of capital (% a year) 8 to 10") >= 0));
+  P.addQuote(s, "buyer", NOW, x.id, { supplierId: "northfield", unitPrice: 212, leadDays: 12 });
+  P.closeBidding(s, "buyer", at(2), x.id);
+  assert.strictEqual(x.evalDate, day(2), "offers are measured from the day bidding closed");
+  assert.deepStrictEqual(x.slips, { northfield: 0 }, "the delivery record is frozen at close too");
+  throwsWith(() => P.setAdjustments(s, "buyer", at(2), x.id, { dayPct: 0 }), "locked when bidding closed");
+  assert.strictEqual(P.scoreRFx(x, s, at(30))[0].slack, 6, "ready 14 Nov against need 20 Nov, however late you look");
 });
 
 test("award rules: bidding must close, unqualified blocked, off ranking needs justification", () => {
@@ -138,7 +167,7 @@ test("award rules: bidding must close, unqualified blocked, off ranking needs ju
   techOK(s, x);
   throwsWith(() => P.addQuote(s, "buyer", NOW, x.id, { supplierId: "helio", unitPrice: 1, leadDays: 1 }), "closed");
   throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, "orbit", "cheapest by far"), "not qualified");
-  const top = P.scoreRFx(x).filter(q => q.eligible)[0].supplierId;
+  const top = P.scoreRFx(x, s, NOW).filter(q => q.eligible)[0].supplierId;
   const other = top === "northfield" ? "helio" : "northfield";
   throwsWith(() => P.recommendAward(s, "buyer", NOW, x.id, other, ""), "justification");
   award(s, NOW, x, top, "");

@@ -30,12 +30,13 @@ test("going to RFx from an approved request opens the start form with matching s
   check(!$$('input[name="inv"]').some(b => b.value === "meridian"), "MRO only supplier should not be offered");
 });
 
-test("bad weights and a lone supplier are blocked with clear messages", () => {
+test("an adjustment value out of range and a lone supplier are blocked with clear messages", () => {
   const f = $('form[data-form="rfxStart"]');
-  f.elements.wPrice.value = "60";
+  check(f.elements.capitalPct.value === "8" && f.elements.bufferDays.value === "10", "the defaults are filled in");
+  f.elements.capitalPct.value = "45";
   submit(f);
-  check(toastText().indexOf("add up to 100") >= 0, "toast: " + toastText());
-  f.elements.wPrice.value = "50";
+  check(toastText().indexOf("Cost of capital (% a year) must be between 0 and 30") >= 0, "toast: " + toastText());
+  f.elements.capitalPct.value = "8";
   $$('input[name="inv"]').forEach(b => { b.checked = b.value === "atlas"; });
   submit(f);
   check(toastText().indexOf("two suppliers") >= 0, "toast: " + toastText());
@@ -64,6 +65,16 @@ test("quotes can be recorded and revised, and an uninvited price is validated", 
   submit($('form[data-form="rfxQuote"]'));
   check(text().indexOf("3 of 3") >= 0 || $$("#view tr[data-id=RFX-3006] td").some(c => c.textContent.indexOf("3 of 3") >= 0), "three quotes expected");
   check(btn("Close bidding and compare") && !btn("Close bidding and compare").disabled);
+});
+
+test("the Buyer can change the adjustment values while bidding is open, and each offer shows its bonus and malus", () => {
+  const f = $('form[data-form="rfxAdjust"]');
+  check(f, "the values are editable while open");
+  f.elements.bufferDays.value = "12";
+  submit(f);
+  check(toastText().indexOf("Adjustment values saved") >= 0, "toast: " + toastText());
+  check(text().indexOf("Malus") >= 0 && text().indexOf("short of the 12 day buffer") >= 0, "malus lines use the new buffer");
+  check(text().indexOf("Adjusted unit") >= 0);
 });
 
 // The technical reviewer marks every offer acceptable, then sends the recommendation to the Buyer.
@@ -98,7 +109,7 @@ test("the reviewer must give a reason for a failed offer and evaluate every offe
 
 test("the Buyer recommends among acceptable offers, and off ranking needs a note", () => {
   role("buyer"); tab("rfx"); openRfx("RFX-3006");
-  check(text().indexOf("Top eligible quote") >= 0, "comparison missing");
+  check(text().indexOf("Lowest eligible") >= 0 && text().indexOf("Ranked on the adjusted price") >= 0, "comparison missing");
   const recs = $$('#view button[data-act="rfxAward"]');
   check(recs.length === 3 && recs[0].textContent === "Recommend", "three Recommend buttons");
   click(recs[2]);
@@ -107,6 +118,8 @@ test("the Buyer recommends among acceptable offers, and off ranking needs a note
   click($$('#view button[data-act="rfxAward"]')[0]);
   check(toastText().indexOf("sent for approval: Director.") >= 0, "a clean $19,600 award goes to the Director only: " + toastText());
   check(text().indexOf("Award pending approval") >= 0 && text().indexOf("Waiting for the Director") >= 0);
+  check(text().indexOf("locked when bidding closed") >= 0 && !$('form[data-form="rfxAdjust"]'), "values are locked after close");
+  check(/is \$[\d,.]+ (higher|lower) for the order on the same basis/.test(text()), "the approver sees the gap to the next offer");
 });
 
 test("the Director approves the award, and only then can a PO follow", () => {

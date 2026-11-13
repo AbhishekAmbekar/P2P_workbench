@@ -332,3 +332,14 @@ tr.gate td{background:#fff7ed}
 .guidetop{border-bottom:1px solid var(--line);padding-top:12px;padding-bottom:12px}
 .specrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;margin-top:6px}
 @media (max-width:600px){.specrow{grid-template-columns:1fr}}
+
+/* RFx adjusted price: bonus and malus lines */
+.adjbox{margin:10px 0;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--card)}
+.adjbox summary{cursor:pointer;font-weight:600;padding:4px 0}
+.adjbox .form{margin-top:8px}
+.adjbox label .hint{display:block;margin-top:2px}
+.adjcell{min-width:260px;max-width:380px}
+.adjline{display:flex;gap:10px;justify-content:space-between;font-size:var(--fs-sm,13px);line-height:1.45;margin:2px 0}
+.adjline .num{white-space:nowrap}
+.adjline b.malus{color:#b45309}
+.adjline b.bonus{color:#1d4ed8}

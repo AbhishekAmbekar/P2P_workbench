@@ -136,7 +136,7 @@ test("tariff and freight on a quote show as landed cost in the comparison", () =
   q("tidewater", "25", "20");
   click(btn("Close bidding and compare"));
   check(text().indexOf("30% tariff") >= 0 && text().indexOf("$26.00") >= 0, "landed cost for the tariffed quote missing");
-  check(text().indexOf("Landed total") >= 0 && text().indexOf("so a tariff can change the winner") >= 0);
+  check(text().indexOf("Adjusted unit") >= 0 && text().indexOf("landed cost (price, tariff and freight)") >= 0);
   const first = $$("#view table")[$$("#view table").length - 1].querySelectorAll("tr")[1];
   check(first.cells[1].textContent.indexOf("Brightpath") < 0, "the tariffed quote should not win despite the lowest sticker price");
 });

@@ -147,20 +147,22 @@
     var noQuote = x.invited.filter(function (s) { return !x.quotes.some(function (q) { return q.supplierId === s; }); });
     return band({ home: "rfx", id: id, title: x.id, flow: f, pills: App.status(x.status) + " " + App.pill(x.type, "mut"),
       sub: esc("For " + (r.prNo || r.id) + " · " + r.qty + " " + r.uom + " " + it.name),
-      facts: [["Invited", String(x.invited.length)], ["Quotes in", String(x.quotes.length)], ["Weights", x.weights.price + " / " + x.weights.lead + " / " + x.weights.quality],
-        ["Best landed", ranked.length ? money(Math.min.apply(null, ranked.map(function (q) { return q.landed; }))) : "None yet"], ["Awarded to", aw ? esc(aw) : "Not yet"], ["Opened", day(x.createdAt)]]
+      facts: [["Invited", String(x.invited.length)], ["Quotes in", String(x.quotes.length)], ["Ranked on", "Adjusted price"],
+        ["Lowest adjusted", ranked.length ? money(ranked[0].adjusted) : "None yet"], ["Awarded to", aw ? esc(aw) : "Not yet"], ["Opened", day(x.createdAt)]]
     }) + '<div class="page"><div class="secs">' +
-      section("Ranking", table(["#", "Supplier", "Status", "Technical", "#Landed", "#Lead days", "Valid until", "#Score", "Can win"], ranked.map(function (q, i) {
+      section("Ranking", table(["#", "Supplier", "Status", "Technical", "#Landed", "#Bonus and malus", "#Adjusted", "#Lead days", "Valid until", "Can win"], ranked.map(function (q, i) {
         var can = q.eligible ? (q.expired ? App.pill("Quote expired", "warn") : App.pill("Yes", "ok")) :
           App.pill(!q.techOk ? "Fails spec" : q.supplierStatus === "Not qualified" ? "Not qualified" : "Documents", "bad");
         var tech = q.tech === "Acceptable" ? App.pill("Acceptable", "ok") : q.tech === "Not acceptable" ? App.pill("Not acceptable", "bad") : App.pill(q.tech, "mut");
         return [String(i + 1), esc(App.supplier(q.supplierId).name) + (x.award && x.award.supplierId === q.supplierId ? " " + App.pill("Awarded", "ok") : ""), App.status(q.supplierStatus),
-          tech + (q.techNote ? '<div class="muted">' + esc(q.techNote) + "</div>" : ""), money(q.landed), String(q.leadDays), esc(q.validUntil || ""), q.total.toFixed(1), can];
-      }), "No quotes yet."), "Landed cost, lead time and supplier rating, weighted " + x.weights.price + "/" + x.weights.lead + "/" + x.weights.quality, true) +
+          tech + (q.techNote ? '<div class="muted">' + esc(q.techNote) + "</div>" : ""), money(q.landed),
+          '<span title="' + esc(q.adjustments.map(function (l) { return l.kind + " " + l.label + ": " + money(l.amount); }).join("\n")) + '">' + money(q.adjusted - q.landed) + "</span>",
+          "<b>" + money(q.adjusted) + "</b>", String(q.leadDays), esc(q.validUntil || ""), can];
+      }), "No quotes yet."), "Landed cost plus bonus and malus, per unit, lowest first", true) +
       section("Decision", '<div class="pad">' + dl([
         ["Technical reviewer", x.techRole ? esc(P.roleLabel(x.techRole)) + (x.techDone ? ", sent to the Buyer " + day(x.techDone.at) : ", not done yet") : "Not reviewed (older record)"],
         ["Recommended", x.recommendation ? esc(App.supplier(x.recommendation.supplierId).name) + " for " + money(x.recommendation.value) : ""],
-        ["Award", aw ? esc(aw) + " on " + day(x.award.at) : "Not awarded"], ["Justification", x.award ? esc(x.award.justification || "Top scored eligible quote") : ""],
+        ["Award", aw ? esc(aw) + " on " + day(x.award.at) : "Not awarded"], ["Justification", x.award ? esc(x.award.justification || "Lowest adjusted price among eligible offers") : ""],
         ["Approvals", approvalText(x.award ? x.award.approvals : x.awardApprovals)],
         ["Earlier rejections", (x.pastRecommendations || []).map(function (p) {
           var no = p.approvals.find(function (a) { return a.status === "Rejected"; });
@@ -192,8 +194,8 @@
       section("Price", '<div class="pad">' + dl([["Unit price", money(po.unitPrice) + " " + (po.refPrice ? App.pill((varPct > 0 ? varPct + "% above " : varPct < 0 ? Math.abs(varPct) + "% below " : "Equal to ") + (po.contractId ? "contract " : "standard ") + money(po.refPrice), varPct > 10 ? "bad" : varPct > 0 ? "warn" : "ok") : "")],
         ["Landed unit", money(P.landedUnit(po.unitPrice, po.tariffPct, po.freight)) + ' <span class="muted">tariff ' + (po.tariffPct || 0) + "%, freight " + money(po.freight || 0) + "</span>"],
         ["Landed value", money(P.poLanded(po))], ["Price reason", esc(po.varianceReason)]]) + "</div>" +
-        (f.rfx ? table(["Supplier", "#Landed", "#Lead", "#Score"], P.scoreRFx(f.rfx, s, App.now()).map(function (q) {
-          return [esc(App.supplier(q.supplierId).name) + (q.supplierId === po.supplierId ? " " + App.pill("Awarded", "ok") : ""), money(q.landed), q.leadDays + " d", q.total.toFixed(1)];
+        (f.rfx ? table(["Supplier", "#Landed", "#Lead", "#Adjusted"], P.scoreRFx(f.rfx, s, App.now()).map(function (q) {
+          return [esc(App.supplier(q.supplierId).name) + (q.supplierId === po.supplierId ? " " + App.pill("Awarded", "ok") : ""), money(q.landed), q.leadDays + " d", money(q.adjusted)];
         }), "") : ""), f.rfx ? "Against reference and the other bids" : "Against reference") +
       (f.service ? section("Service consumption", '<div class="pad">' + App.serviceBar(po) + "</div>" +
         table(["Entry", "Month", "#Quantity", "#Value", "Work done", "Status"], f.ses.map(function (e) {

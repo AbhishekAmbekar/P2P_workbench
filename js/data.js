@@ -12,6 +12,18 @@
       poOverrun: 0.10,   // a PO may not exceed the approved PR value by more than this
       priceVariance: 0.10 // a PO priced this far above the contract or standard price needs a written reason
     },
+    // RFx offers are compared on one adjusted price: landed cost plus a dollar value for each difference that is not
+    // in the price (bonus and malus, the total cost of ownership approach). These are the defaults for a new RFx. The
+    // Buyer can change them while bidding is open; they lock when bidding closes.
+    adjust: {
+      capitalPct: 8,       // cost of capital, % a year: each day of payment terms longer than standard is worth this
+      baseTermsDays: 45,   // standard payment terms, days
+      conditionalCost: 600, // one time cost of extra checks (first article, incoming inspection) for a conditional supplier
+      bufferDays: 10,      // planned ready date should be at least this many days before the need date
+      dayPct: 0.5,         // cost per day short of that buffer, % of landed unit cost (expediting, premium freight, waiting)
+      qualityTarget: 85,   // supplier rating the plant expects
+      qualityPct: 0.2      // cost per rating point below the target, % of landed unit cost (rework, rejects, checks)
+    },
     sites: ["Pilot Line", "Plant A", "Plant B", "Field Service"],
     costCenters: ["CC-100 Operations", "CC-200 Engineering", "CC-300 Maintenance", "CC-400 Quality"],
     // Annual budget per cost center. A request that would take a cost center past its budget needs Executive approval.

@@ -45,8 +45,7 @@
         P.decideAward(s, step.role, T(off, 15), x.id, "Approved", "Supplier choice and price are in line with the comparison");
       }
     }
-    var W = { wPrice: 50, wLead: 25, wQuality: 25 };
-    var rfxArgs = function (type, invited) { return Object.assign({ type: type, invited: invited }, W); };
+    var rfxArgs = function (type, invited) { return { type: type, invited: invited }; };
 
     // Delivery history from before this workspace, as if brought in from the old system: promised and received dates.
     // Each list is how many days late (or early, below zero) each past delivery was.
@@ -106,7 +105,7 @@
     quote(x, -39, "helio", 1440, 25, "Net 30");
     P.closeBidding(s, "buyer", T(-38), x.id);
     techReview(x, -38);
-    awardTo(x, -37, "northfield");
+    awardTo(x, -37, "northfield", "Cobalt Ridge is lower on adjusted price but would arrive 2 days after the need date, and the line cannot run without solvent.");
     po = P.createPO(s, "buyer", T(-36), r.id, {});
     P.confirmPO(s, "buyer", T(-35), po.id, D(-22));
     P.postGRN(s, "warehouse", T(-21), po.id, { qty: 12, result: "Accepted", note: "All drums sealed, certificates attached." });
@@ -179,7 +178,7 @@
     r = req(-11, "Tom Becker", "CP-104", 60, 215, 30, "Pilot Line", "CC-200 Engineering", "Housings for the pack build");
     approveAll(r, -8);
     x = P.startRFx(s, "buyer", T(-7), r.id, rfxArgs("RFP", ["northfield", "helio", "brightpath"]));
-    quote(x, -5, "northfield", 212, 28, "Net 45");
+    quote(x, -5, "northfield", 212, 30, "Net 45");
     quote(x, -5, "helio", 205, 40, "Net 30", { tariffPct: 12 });
     quote(x, -5, "brightpath", 219, 24, "Net 45");
     P.closeBidding(s, "buyer", T(-4), x.id);
